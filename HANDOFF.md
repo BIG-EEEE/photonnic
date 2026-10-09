@@ -1,6 +1,6 @@
 # Photonic: design report and developer handoff
 
-9 October 2026. Design phase complete.
+9 October 2026. Design phase complete. The build is under way: see **Build status** at the end, which supersedes the prototype notes below.
 
 ## Files
 
@@ -150,3 +150,101 @@ Plus the app icon. Every screen is also rendered at 375 × 667.
 5. **Fonts:** mockups were rendered on Windows with Inter standing in for SF Pro. Spacing should hold on an iPhone; check it on a device.
 6. **Motion and haptics** were judged in a desktop browser; the feel on a device is unverified. `navigator.vibrate` does nothing on iOS Safari.
 7. **Sample photos** come from picsum.photos (Unsplash licence) and are for the prototype only.
+
+---
+
+## Build status (updated 9 October 2026)
+
+Live test build: **https://photonnic.destinyfamily.org**
+
+| Milestone | State | Commit |
+|---|---|---|
+| M1 Installable, offline shell of the approved design | Done | 148dc0d |
+| M2 Photos stored on the phone (IndexedDB) | Done | 48844a7 |
+| M3 Phone's own camera and photo picker, resizing, EXIF date and GPS | Done | 48844a7 |
+| Appearance: System / Light / Dark | Done | bf51db0, 551021d |
+| M4 Calendar and memories finished (Look Back, captions, theme first paint) | Done | 551021d |
+| M5 Backup export and restore | Done | 7ec93a8 |
+| M6 Daily reminders | Not started: needs a small push server (PHP + cron on cPanel) | |
+| M7 Real-device QA | Not started | |
+
+### What the app really does now
+
+Everything in the prototype is real except reminders. Photos, captions, dates and locations are stored in IndexedDB on the phone. Capture opens the phone's own camera or photo picker. Export makes a real zip, and restore reads one back. Nothing is uploaded anywhere. `?demo` loads the sample journal into memory only and never opens the real database.
+
+### Tests: `npm test`
+
+It builds both versions, then runs three suites:
+
+| Suite | Checks | What it proves |
+|---|---|---|
+| `tests/unit.mjs` | 111 | Local dates in five time zones and across daylight saving changes; photo sizing and file checks; the backup format round trip; 25 kinds of bad archive refused |
+| `tests/run.mjs` | 39 | Calendar, detail, empty and dark screens match the approved renders pixel for pixel; the demo journey with real file pickers; appearance; production starts empty, installable, offline |
+| `tests/prod.mjs` | 83 | Production build with real IndexedDB, file pickers and downloads |
+
+**Last run: 233 passed, 0 failed.**
+
+`tests/prod.mjs` reads the stored data back for every check. It covers:
+- capture and save;
+- orientation, very large, small, corrupt and non-photo files;
+- a cancelled picker and a full phone (quota) on save;
+- replace and Undo, captions, remove and delete-all;
+- reload and close/reopen;
+- location: off by default, opt-in, denied, unavailable, and never substituted for library photos;
+- appearance, including no start-up flash;
+- offline launch and saving;
+- export (download and share);
+- restore into a clean install, conflicts (Keep / Replace / Cancel), and eight bad archives;
+- a full phone during restore, which rolls back completely;
+- Look Back with real records;
+- demo isolation;
+- a database left by an older build;
+- a 320 pt phone with safe areas.
+
+The Web Share sheet is stubbed in the share test, because desktop automation cannot press a system sheet.
+
+### Backup format (version 1)
+
+`photonic-backup-YYYY-MM-DD.zip`, made on the phone:
+
+- `photos/<date>.<jpg|png|webp>`: the saved image, byte for byte.
+- `manifest.json`: `{ format: "photonic-backup", version: 1, createdAt, count, entries: [...] }`. Each entry has the date, file, type, bytes, caption, `takenAt`, `dateSource`, location `{ lat, lng, source }` or null, width, height, `createdAt` and `updatedAt`.
+
+The full description is in `src/backup.js`.
+
+- **Thumbnails and internal ids are not stored.** They are rebuilt on restore.
+- **A newer version is refused** with "update the app". Older versions will be lifted in `migrate()` once version 2 exists.
+
+**Before anything is written, restore checks:**
+- that the file is a zip with a valid manifest, format and version;
+- that every date is real and not in the future;
+- that file names are safe, with no `..`, absolute paths or backslashes;
+- limits: 600 MB per archive, 1 GB uncompressed, 25 MB per photo, 5,000 files;
+- that no day appears twice;
+- that every photo is really an image, judged by its bytes and then fully decoded.
+
+**Conflicts get one question:** keep mine, or use the backup's. All days are then written in one transaction, so any failure leaves the journal unchanged.
+
+### Deploying an update
+
+The site is on the destinyt cPanel; the docroot is `~/public_html/photonnic.destinyfamily.org`.
+
+1. Run `npm test`. Everything must pass.
+2. Run `npm run build`, then `tar --force-local -czf photonic-dist.tgz -C dist .`
+3. Copy it to the server: `scp -i ~/.ssh/stormerhost_key photonic-dist.tgz destinyt@172.93.108.60:~/`
+4. On the server, swap `assets/` and unpack: `D=public_html/photonnic.destinyfamily.org; rm -rf $D/assets.old; mv $D/assets $D/assets.old; tar -xzf ~/photonic-dist.tgz -C $D && rm -rf $D/assets.old ~/photonic-dist.tgz`
+5. Never deploy `dist-demo/`.
+
+How the server is set up:
+- **`.htaccess`:** the cPanel block, then a `Photonic` block (no-cache for the app shell, long cache for hashed assets, security headers), then a `Photonic https` redirect.
+- **Certificate renewal:** the redirect skips `/.well-known/`, so Let's Encrypt (AutoSSL) renewals keep working.
+
+### Still needs a real phone
+
+- **Status bar area:** on an iPhone, from the home screen; also the notch and Dynamic Island in light and dark.
+- **Photo dates and GPS:** whether iPhone Safari keeps them on photos picked from the library.
+- **Camera:** opening, and Retake, from the installed app.
+- **Export:** the share sheet on iPhone and Android, and that the zip arrives in Files or Drive.
+- **Restore:** a backup from one phone restored onto another.
+- **Persistent storage:** whether the browser grants it, which is untested on a phone.
+- **Feel:** motion and haptics.
