@@ -298,3 +298,12 @@ button.day::before { content: ""; position: absolute; inset: calc(var(--cell-gap
   .exit-right, .exit-up { animation-direction: reverse; }
   .day.pop { animation: none; }
 }
+
+/* ---- Switch (Settings: location for new photos) ---- */
+.switch { position: relative; display: inline-block; width: 51px; height: 31px; border-radius: 16px; background: var(--tile);
+  box-shadow: inset 0 0 0 1px var(--hairline); transition: background .2s ease; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .15), 0 0 0 .5px rgba(0, 0, 0, .04); transition: transform .28s var(--spring); }
+.switch.on { background: var(--ink); }
+.switch.on::after { transform: translateX(20px); background: var(--ground); }
+@media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }

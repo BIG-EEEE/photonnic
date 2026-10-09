@@ -1,8 +1,14 @@
 /* Photonic app. Grew out of the approved prototype (prototype/app.js), which
  * stays untouched as the design reference.
  *
- *   mount(phEl, { photos, today, seed, base })
+ *   mount(phEl, { store, days, today, seed, locate })
+ *
+ * Photos come from `store` (src/store.js): IndexedDB in the app, memory in ?demo.
+ * Capture uses the phone's own camera and photo picker (file inputs); nothing is uploaded.
  */
+import { key, todayKey, parseKey as parse, reliableKey } from "./dates.js";
+import { processPhoto, readMeta, deviceLocation, thumbFrom, PhotoError } from "./image.js";
+import { requestPersistence } from "./store.js";
 
 // ---------- Icons (SF Symbols-style, one stroke weight) ----------
 const I = {
@@ -28,34 +34,30 @@ const I = {
 // ---------- Dates ----------
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const pad = (n) => String(n).padStart(2, "0");
-const key = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
-const parse = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d); };
 const longDate = (k) => { const d = parse(k); return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
 const dayName = (k) => DAYS[parse(k).getDay()];
 const shortDate = (k) => { const d = parse(k); return `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`; };
 const dm = (k) => { const d = parse(k); return `${d.getDate()} ${MONTHS[d.getMonth()]}`; };
 
-const todayKey = () => { const d = new Date(); return key(d.getFullYear(), d.getMonth(), d.getDate()); };
-
-// Camera roll "recents" for the picker: today's shots first, then older ones.
-const RECENTS = [129, 167, 177, 50, 71, 117, 83, 95, 11, 44, 90, 104, 155, 58, 140, 37, 38, 67];
-const FEEDS = [129, 177];
+const byDate = (days) => Object.fromEntries(days.map((d) => [d.date, d]));
+const OPEN_FAILED = "That photo couldn’t be opened. Try another one.";
 
 // ---------- App ----------
 class App {
   constructor(ph, opts) {
     this.ph = ph;
-    this.base = opts.base || "photos/";
+    this.store = opts.store;
     this.screen = ph.closest(".mini-screen, .screen");
-    this.seedFn = opts.seed || (() => ({}));
+    this.seedFn = opts.seed || (() => []);
+    this.fixedToday = !!opts.today;
     this.s = {
       today: opts.today || todayKey(),
-      photos: opts.photos || {},
-      perm: opts.perm || "unknown",
+      photos: byDate(opts.days || []),
+      locate: !!opts.locate,
       tab: "calendar",
-      feed: 0,
     };
+    this.urls = new WeakMap();   // Blob -> object URL
+    this.fullUrls = new Map();   // date -> { id, url } of the full image
     this.instant = !!opts.still;
     ph.innerHTML = "";
     this.layers = [];
@@ -65,7 +67,42 @@ class App {
     if (!opts.still) this.wire();
   }
 
-  src(id) { return typeof id === "string" ? id : `${this.base}p${id}.jpg`; }
+  // Thumbnails and full images are Blobs (IndexedDB) or plain URLs (demo).
+  url(x) {
+    if (!x) return "";
+    if (typeof x === "string") return x;
+    let u = this.urls.get(x);
+    if (!u) { u = URL.createObjectURL(x); this.urls.set(x, u); }
+    return u;
+  }
+  thumb(p) { return this.url(p.thumb); }
+  fullCached(k) { const c = this.fullUrls.get(k), p = this.s.photos[k]; return c && p && c.id === p.id ? c.url : ""; }
+  async fullUrl(k) {
+    const p = this.s.photos[k];
+    if (!p) return "";
+    const cached = this.fullCached(k);
+    if (cached) return cached;
+    const img = await this.store.getImage(k);
+    if (!img || this.s.photos[k] !== p) return img ? "" : this.thumb(p);
+    const url = this.url(img);
+    this.fullUrls.set(k, { id: p.id, url });
+    return url;
+  }
+  // Swap thumbnails for the full image once it is read from storage.
+  hydrate(root) {
+    for (const img of root.querySelectorAll("img[data-full]")) {
+      this.fullUrl(img.dataset.full).then((u) => { if (u && img.isConnected && img.getAttribute("src") !== u) img.src = u; }, () => {});
+    }
+  }
+  // Release a day's object URLs once nothing shows them any more.
+  forget(p) {
+    if (!p) return;
+    const c = this.fullUrls.get(p.date);
+    const urls = [c && c.id === p.id && c.url, p.thumb instanceof Blob && this.urls.get(p.thumb)].filter((u) => u && u.startsWith("blob:"));
+    if (c && c.id === p.id) this.fullUrls.delete(p.date);
+    if (p.thumb instanceof Blob) this.urls.delete(p.thumb);
+    setTimeout(() => urls.forEach((u) => URL.revokeObjectURL(u)), 1500);
+  }
   el(html) { const t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; }
   days() { return Object.keys(this.s.photos).sort(); }
   count() { return this.days().length; }
@@ -84,6 +121,7 @@ class App {
     this.baseLayer.innerHTML = (this.s.tab === "calendar" ? this.calendarHTML() : this.lookbackHTML()) + this.tabbarHTML();
     const nsc = this.baseLayer.querySelector(".scroll");
     if (nsc) nsc.scrollTop = y;
+    this.hydrate(this.baseLayer);
   }
 
   headerHTML() {
@@ -120,7 +158,7 @@ class App {
       // Days before the first photo were never missed: show them like the future, inactive.
       const isToday = k === this.s.today, future = k > this.s.today || !this.first || k < this.first;
       const label = `${dayName(k)} ${dm(k)}`;
-      if (p) cells += `<button data-hit-expanded class="day has press${isToday ? " today" : ""}" data-a="open" data-k="${k}" aria-label="${label}, photo" style="background-image:url('${this.src(p.id)}')"><img src="${this.src(p.id)}" alt="" loading="lazy" decoding="async"><span class="n">${d}</span></button>`;
+      if (p) cells += `<button data-hit-expanded class="day has press${isToday ? " today" : ""}" data-a="open" data-k="${k}" aria-label="${label}, photo" style="background-image:url('${this.thumb(p)}')"><img src="${this.thumb(p)}" alt="" loading="lazy" decoding="async"><span class="n">${d}</span></button>`;
       else if (isToday) cells += `<button data-hit-expanded class="day today press" data-a="capture" data-k="${k}" aria-label="Today, ${dm(k)}, no photo yet">${d}</button>`;
       else if (future) cells += `<span class="day future" aria-hidden="true">${d}</span>`;
       else cells += `<button data-hit-expanded class="day past press" data-a="add-past" data-k="${k}" aria-label="${label}, no photo">${d}</button>`;
@@ -154,7 +192,7 @@ class App {
     const body = items.length ? items.map(([label, k]) => {
       const p = this.s.photos[k];
       return `<div class="lb-item"><div class="lb-label">${label}<span>${dayName(k).slice(0, 3)} ${dm(k)}</span></div>
-        <button class="lb-photo press" data-a="open" data-k="${k}" aria-label="Open ${dm(k)}"><img src="${this.src(p.id)}" alt=""></button>
+        <button class="lb-photo press" data-a="open" data-k="${k}" aria-label="Open ${dm(k)}"><img src="${this.fullCached(k) || this.thumb(p)}" data-full="${k}" alt=""></button>
         ${p.caption ? `<p class="lb-cap">${esc(p.caption)}</p>` : ""}</div>`;
     }).join("") : `<div class="lb-item"><p class="lb-cap" style="color:var(--ink-3)">Photos from earlier months show up here once you have a few.</p></div>`;
     return `<div class="scroll" data-scrolls>
@@ -228,7 +266,7 @@ class App {
   detailHTML(k, editing = false) {
     const p = this.s.photos[k];
     const all = this.days(), i = all.indexOf(k);
-    const strip = all.map((d) => `<button class="press${d === k ? " on" : ""}" data-a="goto" data-k="${d}" aria-label="${dm(d)}"><img src="${this.src(this.s.photos[d].id)}" alt="" loading="lazy"></button>`).join("");
+    const strip = all.map((d) => `<button class="press${d === k ? " on" : ""}" data-a="goto" data-k="${d}" aria-label="${dm(d)}"><img src="${this.thumb(this.s.photos[d])}" alt="" loading="lazy"></button>`).join("");
     const cap = editing
       ? `<div class="caption"><textarea rows="2" maxlength="120" placeholder="Add a caption" aria-label="Caption">${esc(p.caption)}</textarea></div><div class="caption-meta">Up to 120 characters</div>`
       : p.caption
@@ -240,7 +278,7 @@ class App {
         ${editing ? `<button class="txt-btn press" data-a="save-caption">Done</button>` : `<button class="circ sm press" data-a="detail-actions" aria-label="Photo options">${I.more}</button>`}
       </div>
       <div class="detail-body">
-        <div class="photo-frame" data-swipe><img src="${this.src(p.id)}" alt="Photo from ${dm(k)}"></div>
+        <div class="photo-frame" data-swipe><img src="${this.fullCached(k) || this.thumb(p)}" data-full="${k}" alt="Photo from ${dm(k)}"></div>
         ${cap}
         <div class="strip-wrap">
           <button class="nav-btn press" data-a="prev" aria-label="Previous photo"${i <= 0 ? " disabled" : ""}>${I.back}</button>
@@ -253,6 +291,7 @@ class App {
     this.cur = k;
     const layer = this.push(this.detailHTML(k), { name: "detail", anim: fromEl ? "fade-in" : "enter-right" });
     this.centerStrip(layer, true);
+    this.hydrate(layer);
     if (fromEl && !this.instant) this.fly(fromEl, layer.querySelector(".photo-frame"), 12, 22);
     return layer;
   }
@@ -260,6 +299,7 @@ class App {
     const layer = this.top();
     layer.innerHTML = this.detailHTML(this.cur, editing);
     this.centerStrip(layer, dir === 0);
+    this.hydrate(layer);
     if (dir && !this.instant) layer.querySelector(".photo-frame img").animate(
       [{ transform: `translateX(${dir * 40}px)`, opacity: 0 }, { transform: "none", opacity: 1 }],
       { duration: 320, easing: "cubic-bezier(.32,.72,0,1)" });
@@ -306,66 +346,79 @@ class App {
     anim.onfinish = () => { hide.forEach((e) => (e.style.visibility = "")); f.remove(); done && done(); };
   }
 
-  // ----- Capture -----
-  capture(k = this.s.today) {
+  // ----- Capture: the phone's own camera and photo picker -----
+  // Capture offers both. A missed day, or replacing a past day, goes straight to the
+  // library: the day is already chosen.
+  capture(k = this.s.today, fixed = false) {
     this.target = k;
-    if (this.s.perm === "unknown") return this.primer();
-    this.openCamera();
+    this.libSource = fixed ? "library" : "capture-library";
+    if (k !== this.s.today) return this.pickFile("library");
+    return this.actionSheet("", [["Take photo", "take-photo"], ["Choose from library", "choose-photo"]]);
   }
-  primer() {
-    return this.overlay(`<div class="sheet" role="dialog" aria-label="Camera access">
-      <div class="glyph">${I.cameraLine}</div>
-      <h3>Take today's photo</h3>
-      <p>Photonic uses the camera only when you tap Capture. Your photos are saved on this iPhone and nowhere else.</p>
-      <button class="btn primary wide press" data-a="primer-continue">Continue</button>
-      <button class="btn plain wide press" data-a="library">Choose from library instead</button>
-    </div>`);
+  // Must run inside the tap that asked for it, or the browser blocks the picker.
+  pickFile(source) {
+    this.closeOverlay(true);
+    this.source = source; // camera | library (for this.target) | capture-library (date from the photo)
+    (source === "camera" ? this.camInput : this.libInput).click();
   }
-  systemAlert() {
-    return this.overlay(`<div class="alert" data-system role="alertdialog">
-      <div class="a-body"><h4>“Photonic” Would Like to Access the Camera</h4><p>So you can take one photo a day. Photos stay on this iPhone.</p></div>
-      <div class="a-btns"><button data-a="perm-deny">Don’t Allow</button><button class="def" data-a="perm-allow">Allow</button></div>
-    </div>`);
+  async onFile(file) {
+    if (!file) return; // picker cancelled: nothing to save
+    const source = this.source, target = this.target;
+    const inPreview = this.top()?.dataset.view === "preview";
+    const caption = inPreview ? this.top().querySelector("textarea").value : "";
+    const slow = setTimeout(() => this.toast("Opening photo…"), 300);
+    let photo, meta;
+    try {
+      [meta, photo] = await Promise.all([readMeta(file), processPhoto(file)]);
+    } catch (e) {
+      clearTimeout(slow);
+      return this.toast(e instanceof PhotoError ? e.message : OPEN_FAILED);
+    }
+    clearTimeout(slow);
+    this.ph.querySelector(".toast")?.remove();
+    const d = {
+      k: target, from: source === "camera" ? "camera" : "library", photo, caption,
+      taken: meta.taken, dateSource: "chosen",
+      // The photo's own position wins; the device is asked only for a fresh camera shot.
+      exifLoc: meta.lat != null ? { lat: meta.lat, lng: meta.lng, locationSource: "exif" } : null,
+    };
+    if (source === "camera") { d.k = this.s.today; d.dateSource = "camera"; }
+    if (source === "capture-library") {
+      const t = meta.taken && reliableKey(meta.taken.key, this.s.today) ? meta.taken.key : null;
+      d.k = this.s.today; d.dateSource = t ? "exif" : "today";
+      if (t && t !== this.s.today) { this.pending = d; return this.askDate(t); }
+    }
+    return this.showPreview(d);
   }
-  cameraHTML() {
-    const k = this.target, isToday = k === this.s.today;
-    const top = `<div class="cam-top"><button class="circ-dark press" data-a="close-camera" aria-label="Close camera">${I.close}</button>
-        <span class="chip">${isToday ? "Today" : dayName(k).slice(0, 3)}, ${dm(k)}</span><span style="width:44px"></span></div>`;
-    if (this.s.perm === "denied") return `${top}<div class="denied">${I.cameraOff}
-        <h3>Camera access is off</h3>
-        <p>Turn it on in Settings to take photos here, or pick one from your library.</p>
-        <button class="btn light press" data-a="open-settings-ios">Open Settings</button>
-        <button class="btn ghost press" data-a="library">Choose from library</button></div>`;
-    return `${top}
-      <div class="cam-view"><img src="${this.src(FEEDS[this.s.feed])}" alt="Camera viewfinder"></div>
-      <div class="cam-bottom">
-        <button class="lib-thumb press" data-a="library" aria-label="Choose from library"><img src="${this.src(RECENTS[1])}" alt=""></button>
-        <button class="shutter" data-a="shutter" aria-label="Take photo"></button>
-        <button class="circ-dark press" data-a="flip" aria-label="Switch camera" style="justify-self:end">${I.flip}</button>
-      </div><div class="flash"></div>`;
+  askDate(k) {
+    return this.actionSheet(`This photo is from ${dm(k)}.`, [[`Save to ${shortDate(k)}`, "date-photo"], ["Save to today", "date-today"]]);
   }
-  openCamera() {
-    this.closeOverlay();
-    return this.push(this.cameraHTML(), { cls: "dark", name: "camera", anim: "enter-up" });
+  showPreview(d) {
+    d.url = URL.createObjectURL(d.photo.image);
+    if (d.from === "camera" && this.s.locate && !d.exifLoc) d.locating = deviceLocation();
+    const old = this.draft;
+    this.draft = d;
+    this.closeOverlay(true);
+    const cur = this.top()?.dataset.view === "preview" ? this.top() : null;
+    if (old?.url) setTimeout(() => URL.revokeObjectURL(old.url), 500);
+    if (cur) { cur.innerHTML = this.previewHTML(); return cur; } // retake: same screen, new photo
+    return this.push(this.previewHTML(), { name: "preview", anim: "enter-up" });
   }
-  picker() {
-    const grid = RECENTS.map((id) => `<button class="press" data-a="pick" data-id="${id}" aria-label="Photo"><img src="${this.src(id)}" alt="" loading="lazy"></button>`).join("");
-    return this.overlay(`<div class="picker" data-system role="dialog" aria-label="Photos">
-      <div class="p-head"><button data-a="dismiss">Cancel</button><b>Photos</b><span></span></div>
-      <div class="p-sub">Choose a photo for ${dm(this.target)}</div>
-      <div class="p-grid">${grid}</div></div>`);
+  dropDraft() {
+    if (this.draft?.url) URL.revokeObjectURL(this.draft.url);
+    this.draft = null;
   }
 
   previewHTML() {
     const d = this.draft, k = d.k, old = this.s.photos[k], isToday = k === this.s.today;
-    const conflict = old ? `<div class="conflict"><img src="${this.src(old.id)}" alt="Current photo">
+    const conflict = old ? `<div class="conflict"><img src="${this.thumb(old)}" alt="Current photo">
         <span>${isToday ? "Today" : dm(k)} already has a photo. Saving replaces it.</span></div>` : "";
     return `<div class="bar">
         <button class="circ sm press" data-a="cancel-preview" aria-label="Cancel">${I.close}</button>
         <div class="ttl"><b>${isToday ? "Today" : dayName(k)}</b><span>${longDate(k)}</span></div><span></span>
       </div>
       <div class="preview-body">
-        <div class="photo-frame"><img src="${this.src(d.id)}" alt="New photo"></div>
+        <div class="photo-frame"><img src="${d.url}" alt="New photo"></div>
         <div class="field"><textarea maxlength="120" placeholder="Add a caption (optional)" aria-label="Caption">${esc(d.caption || "")}</textarea></div>
         ${conflict}
         <div class="actions">
@@ -374,20 +427,42 @@ class App {
         </div>
       </div>`;
   }
-  openPreview(id, from) {
-    this.closeOverlay(true);
-    this.draft = { k: this.target, id, from, caption: "" };
-    const cam = this.top() && this.top().dataset.view === "camera";
-    const layer = this.push(this.previewHTML(), { name: "preview", anim: cam ? "fade-in" : "enter-up" });
-    if (cam && !this.instant) setTimeout(() => { const c = this.layers.find((l) => l.dataset.view === "camera"); if (c) { c.remove(); this.layers.splice(this.layers.indexOf(c), 1); } }, 260);
-    else if (cam) { const c = this.layers.find((l) => l.dataset.view === "camera"); c.remove(); this.layers.splice(this.layers.indexOf(c), 1); }
-    return layer;
-  }
-  save() {
+  async save() {
     const layer = this.top(), d = this.draft;
+    if (this.saving || !d || layer?.dataset.view !== "preview") return;
+    const btn = layer.querySelector('[data-a="save"]'), label = btn.textContent;
     d.caption = layer.querySelector("textarea").value.trim();
-    const prev = this.s.photos[d.k];
-    this.s.photos[d.k] = { id: d.id, caption: d.caption };
+    this.saving = true; btn.disabled = true; btn.textContent = "Saving…";
+    let loc = d.exifLoc;
+    if (!loc && d.locating) {
+      const p = await Promise.race([d.locating, new Promise((r) => setTimeout(() => r(null), 3000))]);
+      if (p) loc = { ...p, locationSource: "device" };
+    }
+    const input = {
+      date: d.k, image: d.photo.image, thumb: d.photo.thumb, width: d.photo.width, height: d.photo.height,
+      caption: d.caption, takenAt: d.taken?.at || null, dateSource: d.dateSource, ...(loc || {}),
+    };
+    let day, prev = null;
+    try {
+      if (this.s.photos[d.k]) {
+        try { ({ day, previous: prev } = await this.store.replace(input)); }
+        catch (e) { if (e.code !== "missing") throw e; day = await this.store.add(input); }
+      } else day = await this.store.add(input);
+    } catch (e) {
+      this.saving = false; btn.disabled = false; btn.textContent = label;
+      if (e.code === "exists") {
+        // Saved from another tab meanwhile: show this day's photo and ask again, never overwrite.
+        const fresh = await this.store.get(d.k).catch(() => null);
+        if (fresh) { this.s.photos[d.k] = fresh; this.renderBase(); layer.innerHTML = this.previewHTML(); layer.querySelector("textarea").value = d.caption; }
+      }
+      return this.toast(e.message || "Couldn’t save the photo. Try again.");
+    }
+    this.saving = false;
+    if (!this.persistAsked) { this.persistAsked = true; requestPersistence(); }
+    const before = this.s.photos[d.k];
+    this.s.photos[d.k] = day;
+    this.fullUrls.set(d.k, { id: day.id, url: d.url }); // the preview's URL now shows the saved photo
+    this.draft = null;
     // Whatever sat underneath (a detail page) is now out of date: go home.
     this.layers.filter((l) => l !== layer).forEach((l) => l.remove());
     this.layers = [layer];
@@ -400,9 +475,18 @@ class App {
     this.fly(layer.querySelector(".photo-frame"), cell, 22, 12, () => {
       cell.classList.add("pop"); this.haptic(18);
       this.toast(prev ? `Replaced the photo for ${dm(d.k)}` : `Saved to ${dm(d.k)}`,
-        prev ? () => { this.s.photos[d.k] = prev; this.renderBase(); } : null);
+        prev ? () => this.undoReplace(d.k, day) : null);
     });
+    if (before && before !== day) this.forget(before);
     this.pop("fade-out");
+  }
+  async undoReplace(k, replacement) {
+    try {
+      const back = await this.store.undo(k);
+      this.forget(replacement);
+      this.s.photos[k] = back;
+      this.renderBase();
+    } catch (e) { this.toast(e.message || "Couldn’t undo that."); }
   }
 
   // ----- Menus and settings -----
@@ -418,28 +502,26 @@ class App {
       <button class="cancel" data-a="dismiss">Cancel</button></div>`);
   }
   settingsHTML() {
-    const cam = { granted: "Allowed", denied: "Off", unknown: "Not asked yet" }[this.s.perm];
     const n = this.count();
     const chev = `<svg class="i" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="m9 5 7 7-7 7"/></svg>`;
     return `<div class="scroll">
       <div class="bar"><button class="circ sm press" data-a="back" aria-label="Back">${I.back}</button><span></span><span></span></div>
       <div class="page-head"><h1>Settings</h1></div>
-      <div class="group-label">Access</div>
+      <div class="group-label">Camera and location</div>
       <div class="group">
-        <button class="row press" data-a="open-settings-ios">Camera<span class="v">${cam}${chev}</span></button>
-        <button class="row press" data-a="open-settings-ios">Photo library<span class="v">Only what you pick${chev}</span></button>
+        <button class="row press" role="switch" aria-checked="${this.s.locate}" data-a="toggle-locate">Location for new photos<span class="v"><span class="switch${this.s.locate ? " on" : ""}" aria-hidden="true"></span></span></button>
+        <div class="row">Photo library<span class="v">Only what you pick</span></div>
       </div>
-      <p class="group-foot">Change access in the iPhone Settings app. Photonic never reads your library on its own.</p>
+      <p class="group-foot">Photos are taken with your phone’s own camera. Photonic keeps the location a photo already has; with this on, new camera photos without one get your current location. Locations stay on this phone.</p>
       <div class="group-label">Your photos</div>
       <div class="group">
-        <div class="row">On this iPhone<span class="v">${n} ${n === 1 ? "photo" : "photos"}</span></div>
+        <div class="row">On this phone<span class="v">${n} ${n === 1 ? "photo" : "photos"}</span></div>
         <button class="row press" data-a="export"${n ? "" : " disabled"}>Export all photos<span class="v">${chev}</span></button>
       </div>
-      <p class="group-foot">No account and no servers. Photos are included in your iCloud Backup when it is on.</p>
+      <p class="group-foot">No account and no servers: your photos are kept only in this app on this phone. Export a backup before you change phones or clear your browser’s data.</p>
       <div class="group-label" id="about">About</div>
       <div class="group">
         <div class="row">Version<span class="v">1.0 (1)</span></div>
-        <button class="row press" data-a="open-settings-ios">Privacy policy<span class="v">${chev}</span></button>
       </div>
       <div class="group" style="margin-top:26px;margin-bottom:60px"><button class="row red press" data-a="delete-all"${n ? "" : " disabled"}>Delete all photos</button></div>
     </div><div class="top-fade"></div>`;
@@ -491,13 +573,30 @@ class App {
       frame.addEventListener("pointermove", move); frame.addEventListener("pointerup", end); frame.addEventListener("pointercancel", end);
     });
     document.addEventListener("touchstart", () => {}, { passive: true }); // :active on iOS Safari
+    // The phone's camera and photo picker. Hidden inputs, opened from a tap.
+    const input = (camera) => {
+      const i = Object.assign(document.createElement("input"), { type: "file", accept: "image/*", hidden: true });
+      if (camera) i.setAttribute("capture", "environment");
+      i.dataset.input = camera ? "camera" : "library";
+      i.addEventListener("change", () => { const f = i.files && i.files[0]; i.value = ""; this.onFile(f); });
+      document.body.append(i);
+      return i;
+    };
+    this.camInput = input(true);
+    this.libInput = input(false);
+    // Past midnight with the app open: today moves on.
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden || this.fixedToday) return;
+      const t = todayKey();
+      if (t !== this.s.today) { this.s.today = t; this.renderBase(); }
+    });
   }
 
   act(a, t) {
     const s = this.s;
     switch (a) {
       case "capture": return this.capture(t.dataset.k || s.today);
-      case "add-past": this.target = t.dataset.k; return this.picker();
+      case "add-past": this.target = t.dataset.k; return this.pickFile("library");
       case "open": return this.openDetail(t.dataset.k, t.matches(".day,.lb-photo") ? t : null);
       case "back": return this.top()?.dataset.view === "detail" ? this.closeDetail() : this.pop();
       case "tab": s.tab = t.dataset.tab; this.renderBase(); this.baseLayer.querySelector(".scroll").scrollTop = 0; return this.haptic(5);
@@ -505,57 +604,85 @@ class App {
       case "next": return this.step(1);
       case "goto": { const all = this.days(); const d = Math.sign(all.indexOf(t.dataset.k) - all.indexOf(this.cur)); this.cur = t.dataset.k; return this.rerenderDetail(false, d); }
       case "edit": this.closeOverlay(true); return this.rerenderDetail(true);
-      case "save-caption": s.photos[this.cur].caption = this.top().querySelector("textarea").value.trim(); return this.rerenderDetail(false);
+      case "save-caption": {
+        const k = this.cur, v = this.top().querySelector("textarea").value.trim();
+        return this.store.setCaption(k, v).then((day) => { s.photos[k] = day; this.rerenderDetail(false); }, (e) => this.toast(e.message));
+      }
       case "detail-actions": return this.actionSheet("", [["Edit caption", "edit"], ["Replace photo", "replace"], ["Remove photo", "remove-ask", true]]);
-      case "replace": this.closeOverlay(true); this.target = this.cur; return this.cur === s.today ? this.capture(this.cur) : this.picker();
+      case "replace": this.closeOverlay(true); return this.capture(this.cur, true);
       case "remove-ask": return this.actionSheet(`Remove the photo from ${dm(this.cur)}? This can’t be undone.`, [["Remove photo", "remove", true]]);
       case "remove": {
-        const k = this.cur; delete s.photos[k]; this.closeOverlay(); this.renderBase(); this.pop("fade-out");
-        return this.toast(`Removed the photo from ${dm(k)}`);
+        const k = this.cur, p = s.photos[k];
+        this.closeOverlay();
+        return this.store.remove(k).then(() => {
+          delete s.photos[k]; this.renderBase(); this.pop("fade-out"); this.forget(p);
+          this.toast(`Removed the photo from ${dm(k)}`);
+        }, (e) => this.toast(e.message));
       }
-      case "primer-continue": return this.systemAlert();
-      case "perm-allow": s.perm = "granted"; this.closeOverlay(true); return this.openCamera();
-      case "perm-deny": s.perm = "denied"; this.closeOverlay(true); return this.openCamera();
-      case "close-camera": return this.pop("exit-up");
-      case "flip": s.feed = 1 - s.feed; this.top().querySelector(".cam-view img").src = this.src(FEEDS[s.feed]); return;
-      case "shutter": {
-        this.haptic(12);
-        const f = this.top().querySelector(".flash");
-        f.animate([{ opacity: .9 }, { opacity: 0 }], { duration: 260, easing: "ease-out" });
-        return setTimeout(() => this.openPreview(FEEDS[s.feed], "camera"), 160);
+      case "take-photo": return this.pickFile("camera");
+      case "choose-photo": return this.pickFile(this.libSource || "capture-library");
+      case "date-photo": case "date-today": {
+        const d = this.pending; this.pending = null;
+        if (!d) return this.closeOverlay();
+        if (a === "date-photo") { d.k = d.taken.key; d.dateSource = "exif"; } else { d.k = s.today; d.dateSource = "today"; }
+        return this.showPreview(d);
       }
-      case "library": this.closeOverlay(true); return this.picker();
-      case "pick": return this.openPreview(t.dataset.id.match(/^\d+$/) ? +t.dataset.id : t.dataset.id, "library");
-      case "retake": {
-        const from = this.draft.from; this.pop("fade-out");
-        return from === "camera" ? this.openCamera() : this.picker();
-      }
+      case "retake": return this.pickFile(this.draft?.from === "camera" ? "camera" : this.source === "capture-library" ? "capture-library" : "library");
       case "cancel-preview": {
         const typed = this.top().querySelector("textarea").value.trim();
         if (typed) return this.actionSheet("Discard this photo and caption?", [["Discard", "discard", true]]);
+        this.dropDraft();
         return this.pop("exit-up");
       }
-      case "discard": this.closeOverlay(true); return this.pop("exit-up");
+      case "discard": this.closeOverlay(true); this.dropDraft(); return this.pop("exit-up");
       case "save": return this.save();
       case "menu": return this.menu();
       case "settings": return this.openSettings();
       case "about": return this.openSettings(true);
-      case "export": return this.actionSheet(`Export ${this.count()} photos with their dates and captions`, [["Save to Files as a .zip", "export-done"], ["Save to Photos", "export-done"]]);
-      case "export-done": this.closeOverlay(); return this.toast(`Exported ${this.count()} photos`);
-      case "open-settings-ios": return this.toast("Opens the iPhone Settings app");
-      case "delete-all": return this.actionSheet(`Delete all ${this.count()} photos from Photonic? Photos in your iPhone library are not affected. This can’t be undone.`, [["Delete all photos", "delete-all-do", true]]);
-      case "delete-all-do": s.photos = {}; this.closeOverlay(true); this.popAll(); s.tab = "calendar"; this.renderBase(); return this.toast("All photos deleted");
+      // Backup and restore arrive in M5; until then say so rather than pretend.
+      case "export": this.closeOverlay(true); return this.toast("Export arrives in the next update");
+      case "toggle-locate": {
+        s.locate = !s.locate;
+        this.store.setSetting("locate", s.locate).catch(() => {});
+        const sc = this.top().querySelector(".scroll"), y = sc.scrollTop;
+        this.top().innerHTML = this.settingsHTML();
+        this.top().querySelector(".scroll").scrollTop = y;
+        return;
+      }
+      case "delete-all": return this.actionSheet(`Delete all ${this.count()} photos from Photonic? Photos in your phone’s own photo library are not affected. This can’t be undone.`, [["Delete all photos", "delete-all-do", true]]);
+      case "delete-all-do": {
+        this.closeOverlay(true);
+        return this.store.clear().then(() => {
+          Object.values(s.photos).forEach((p) => this.forget(p));
+          s.photos = {}; this.popAll(); s.tab = "calendar"; this.renderBase(); this.toast("All photos deleted");
+        }, (e) => this.toast(e.message));
+      }
       case "shuffle": { const all = this.days(); return this.openDetail(all[Math.floor(Math.random() * all.length)]); }
       case "undo": { const f = this.undoFn; this.ph.querySelector(".toast")?.remove(); this.undoFn = null; return f && f(); }
-      case "dismiss": return this.closeOverlay();
+      case "dismiss": this.pending = null; return this.closeOverlay();
     }
   }
 
-  // Prototype panel hooks (outside the phone)
-  reset(empty) { this.closeOverlay(true); this.popAll(); Object.assign(this.s, { photos: empty ? {} : this.seedFn(), perm: "unknown", tab: "calendar", feed: 0 }); this.renderBase(); }
-  addDevicePhoto(url) {
-    this.target = this.target && this.top()?.dataset.view !== "detail" ? this.target : this.s.today;
-    this.openPreview(url, "library");
+  // A stored day whose thumbnail is missing gets a new one from its full image.
+  async repairThumbs() {
+    for (const p of Object.values(this.s.photos)) {
+      if (p.thumb && (typeof p.thumb === "string" || p.thumb.size)) continue;
+      try {
+        const img = await this.store.getImage(p.date);
+        if (!img) continue;
+        const day = await this.store.setThumb(p.date, await thumbFrom(img));
+        if (day) { this.s.photos[p.date] = day; this.renderBase(); }
+      } catch {}
+    }
+  }
+
+  // Demo and test hook: reload the memory store. Never touches the real database.
+  async reset(empty) {
+    if (!this.store.reset) throw new Error("reset is demo-only");
+    this.closeOverlay(true); this.popAll(); this.dropDraft();
+    this.store.reset(empty ? [] : this.seedFn());
+    Object.assign(this.s, { photos: byDate(await this.store.list()), tab: "calendar" });
+    this.renderBase();
   }
 }
 

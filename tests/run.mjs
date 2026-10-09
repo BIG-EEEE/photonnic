@@ -18,6 +18,13 @@ const ok = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"} ${label}`);
 const demoSrv = await preview({ preview: { port: 4174, strictPort: true }, build: { outDir: "dist-demo" }, logLevel: "warn" });
 const prodSrv = await preview({ preview: { port: 4173, strictPort: true }, build: { outDir: "dist" }, logLevel: "warn" });
 const DEMO = "http://localhost:4174/?demo";
+const FIX = "tests/fixtures/";
+// Tap something that opens a file input; returns { input, capture } for the input it opened.
+async function pick(page, tap) {
+  const [fc] = await Promise.all([page.waitForEvent("filechooser", { timeout: 5000 }), tap()]);
+  const capture = await fc.element().evaluate((i) => i.hasAttribute("capture"));
+  return { input: fc, capture };
+}
 const PROD = "http://localhost:4173/";
 const browser = await chromium.launch({ executablePath: CHROME });
 
@@ -108,27 +115,41 @@ function compare(actualBuf, refPath, name) {
   await ph.locator(".asheet .cancel").click(); await p.waitForTimeout(300);
   await ph.locator('[data-a="back"]').click(); await p.waitForTimeout(600);
   await check("back to the calendar", () => !document.querySelector('[data-view="detail"]'));
-  await ph.locator(".tab.cam").click(); await ph.locator('[data-a="primer-continue"]').click(); await ph.locator('[data-a="perm-allow"]').click();
-  // The production app has no drawn status bar; the dark camera layer is what matters.
-  await check("camera opens as a dark layer", () => !!document.querySelector('.layer.dark[data-view="camera"]'));
-  await p.waitForTimeout(500);
-  await ph.locator('[data-a="shutter"]').click(); await p.waitForTimeout(500);
+  // Capture: the action sheet opens the phone's own camera (a file input with capture).
+  await ph.locator(".tab.cam").click();
+  let chooser = await pick(p, () => ph.locator('[data-a="take-photo"]').click());
+  ok(chooser.capture, "journey: Take photo opens the camera input (capture attribute)");
+  await chooser.input.setFiles(FIX + "plain.jpg"); await p.locator('[data-view="preview"] .photo-frame img').waitFor();
+  await check("preview shows the real photo", () => document.querySelector('[data-view="preview"] .photo-frame img').src.startsWith("blob:"));
   await ph.locator(".field textarea").fill("Lunch on the bench with Ama");
   await ph.locator('[data-a="save"]').click(); await p.waitForTimeout(900);
-  await check("today now has a photo", () => !!document.querySelector(".day.today.has img"));
+  await check("today now has the photo", () => document.querySelector(".day.today.has img")?.src.startsWith("blob:"));
   await check("capture dot gone", () => !document.querySelector(".circ .dot"));
-  await check("camera layer closed", () => !document.querySelector(".layer.dark"));
-  await ph.locator('[data-a="capture"]').first().click(); await ph.locator('[data-a="library"]').click();
-  await ph.locator('[data-a="pick"]').nth(1).click();
+  // Again from the library: today has a photo, so it must ask to replace, then Undo.
+  await ph.locator('[data-a="capture"]').first().click();
+  chooser = await pick(p, () => ph.locator('[data-a="choose-photo"]').click());
+  ok(!chooser.capture, "journey: Choose from library opens the picker (no capture)");
+  await chooser.input.setFiles(FIX + "plain.jpg"); await p.locator('[data-view="preview"]').waitFor();
   await check("replace label shown", () => document.querySelector('[data-a="save"]').textContent === "Replace photo");
   await ph.locator('[data-a="save"]').click(); await p.waitForTimeout(900);
   await ph.locator('[data-a="undo"]').click(); await p.waitForTimeout(300);
-  await check("undo restores the bench photo", () => document.querySelector(".day.today.has img").src.endsWith("p129.jpg"));
-  await ph.locator('.day[data-k="2026-10-06"]').click(); await ph.locator('[data-a="pick"]').nth(2).click();
+  await check("undo restores the first photo and caption", () => app.s.photos["2026-10-09"].caption === "Lunch on the bench with Ama");
+  // A missed day goes straight to the library and saves to that day.
+  chooser = await pick(p, () => ph.locator('.day[data-k="2026-10-06"]').click());
+  await chooser.input.setFiles(FIX + "dated-gps.jpg"); await p.locator('[data-view="preview"]').waitFor();
   await ph.locator('[data-a="save"]').click(); await p.waitForTimeout(900);
-  await check("missed 6 Oct filled from the library", () => !!document.querySelector('.day[data-k="2026-10-06"] img'));
+  await check("missed 6 Oct filled (the chosen day wins over the photo's 3 Oct)", () => app.s.photos["2026-10-06"]?.dateSource === "chosen");
+  // A library photo from another day asks which day.
+  await ph.locator('[data-a="capture"]').first().click();
+  chooser = await pick(p, () => ph.locator('[data-a="choose-photo"]').click());
+  await chooser.input.setFiles(FIX + "dated-gps.jpg"); await p.locator(".asheet").waitFor();
+  await check("asks: this photo is from 3 October", () => document.querySelector(".asheet .msg").textContent === "This photo is from 3 October.");
+  await ph.locator('[data-a="date-photo"]').click(); await p.locator('[data-view="preview"]').waitFor();
+  await check("3 Oct already has a photo: replace", () => document.querySelector('[data-a="save"]').textContent === "Replace photo");
+  await ph.locator('[data-a="save"]').click(); await p.waitForTimeout(900);
+  await check("saved to 3 Oct with the photo's own location", () => { const d = app.s.photos["2026-10-03"]; return d.dateSource === "exif" && Math.abs(d.lat - 5.556) < 1e-3 && d.locationSource === "exif"; });
   await ph.locator('[data-a="menu"]').click(); await ph.locator('[data-a="settings"]').click(); await p.waitForTimeout(500);
-  await check("settings shows camera Allowed", () => document.querySelector(".row .v").textContent.startsWith("Allowed"));
+  await check("settings: location switch is off by default", () => document.querySelector('[data-a="toggle-locate"]').getAttribute("aria-checked") === "false");
   await ph.locator('[data-a="delete-all"]').click(); await ph.locator('[data-a="delete-all-do"]').click(); await p.waitForTimeout(400);
   await check("delete all leads to the empty state", () => !!document.querySelector(".empty-note"));
   ok(errors.filter((e) => !/fonts\.g/.test(e)).length === 0, `journey: no console errors${errors.length ? " (" + errors.join("; ") + ")" : ""}`);
