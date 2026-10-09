@@ -4,7 +4,8 @@ import { mount } from "./app.js";
 import { openIdbStore, createMemoryStore } from "./store.js";
 
 const ph = document.getElementById("ph");
-const demo = new URLSearchParams(location.search).has("demo");
+// The sample journal exists only in the demo build: production drops this code entirely.
+const demo = import.meta.env.MODE === "demo" && new URLSearchParams(location.search).has("demo");
 
 // The demo journal lives in memory only and never opens the real database,
 // so ?demo and the tests cannot touch anyone's photos.

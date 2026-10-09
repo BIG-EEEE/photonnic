@@ -396,6 +396,10 @@ try {
   await ctx.close();
 
   // ================= 8. Demo stays out of the real journal =================
+  ({ ctx, p } = await open(A, { url: URL_ + "?demo" }));
+  ok((await days(p)).length === real.length && (await p.locator(".day.has").count()) === real.length && !(await p.evaluate(() => "app" in window)), "production ?demo: shows the real journal, no sample data, no test hooks");
+  ok(!fs.readdirSync("dist/assets").some((f) => f.startsWith("demo")) && !fs.readdirSync("dist/assets").some((f) => fs.readFileSync(`dist/assets/${f}`, "utf8").includes("Everything smells of salt")), "production build: contains no sample journal code at all");
+  await ctx.close();
   ({ ctx, p } = await open(A, { url: "http://localhost:4176/?demo" }));
   ok((await p.locator(".day.has").count()) === 67, "demo: shows the sample journal");
   ok(!(await p.evaluate(async () => (await indexedDB.databases()).map((x) => x.name))).length, "demo: opens no database at all (different origin here, and none in code)");
