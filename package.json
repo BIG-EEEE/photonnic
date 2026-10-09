@@ -8,7 +8,7 @@
     "build": "vite build",
     "build:demo": "vite build --mode demo --outDir dist-demo",
     "icons": "node tools/make-icons.mjs",
-    "test": "npm run build && npm run build:demo && node tests/run.mjs"
+    "test": "npm run build && npm run build:demo && node tests/unit.mjs && node tests/run.mjs"
   },
   "devDependencies": {
     "piexifjs": "^1.0.6",

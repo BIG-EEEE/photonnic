@@ -6,7 +6,7 @@
  * Photos come from `store` (src/store.js): IndexedDB in the app, memory in ?demo.
  * Capture uses the phone's own camera and photo picker (file inputs); nothing is uploaded.
  */
-import { key, todayKey, parseKey as parse, reliableKey } from "./dates.js";
+import { key, keyOf, todayKey, parseKey as parse, reliableKey } from "./dates.js";
 import { processPhoto, readMeta, deviceLocation, thumbFrom, PhotoError } from "./image.js";
 import { requestPersistence } from "./store.js";
 
@@ -41,6 +41,8 @@ const dm = (k) => { const d = parse(k); return `${d.getDate()} ${MONTHS[d.getMon
 
 const byDate = (days) => Object.fromEntries(days.map((d) => [d.date, d]));
 const OPEN_FAILED = "That photo couldn’t be opened. Try another one.";
+const THEME_KEY = "photonic-theme"; // first-paint mirror of the stored choice (see index.html)
+const ago = (i) => i === 1 ? "A month ago" : i === 12 ? "A year ago" : i % 12 === 0 ? `${i / 12} years ago` : `${i} months ago`;
 
 // ---------- App ----------
 class App {
@@ -79,6 +81,8 @@ class App {
     root.dataset.theme = dark ? "dark" : "light";
     root.style.colorScheme = dark ? "dark" : "light";
     for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = dark ? "#121211" : "#F8F7F4";
+    // Mirror the real app's choice for the next first paint; the demo never writes it.
+    if (this.store?.kind === "idb") try { localStorage.setItem(THEME_KEY, this.s.theme); } catch {}
   }
 
   // Thumbnails and full images are Blobs (IndexedDB) or plain URLs (demo).
@@ -193,16 +197,24 @@ class App {
       <div class="top-fade"></div><div class="bottom-fade"></div>`;
   }
 
-  lookbackHTML() {
-    const t = parse(this.s.today);
-    const items = [];
-    for (let i = 1; i <= 3 && items.length < 2; i++) {
-      const d = new Date(t.getFullYear(), t.getMonth() - i, t.getDate());
-      const k = key(d.getFullYear(), d.getMonth(), d.getDate());
-      if (this.s.photos[k]) items.push([i === 1 ? "A month ago" : `${i} months ago`, k]);
-    }
+  /* The same day of the month in every earlier month that has a photo, newest first,
+   * then the first photo. A month without that day (the 31st, 29 February) uses its last day. */
+  lookbackItems() {
     const first = this.days()[0];
-    if (first && !items.some(([, k]) => k === first)) items.push(["Your first photo", first]);
+    if (!first) return [];
+    const t = parse(this.s.today), start = parse(first), items = [];
+    const months = (t.getFullYear() - start.getFullYear()) * 12 + t.getMonth() - start.getMonth();
+    for (let i = 1; i <= months; i++) {
+      const last = new Date(t.getFullYear(), t.getMonth() - i + 1, 0).getDate();
+      const k = keyOf(new Date(t.getFullYear(), t.getMonth() - i, Math.min(t.getDate(), last)));
+      if (this.s.photos[k]) items.push([ago(i), k]);
+    }
+    if (!items.some(([, k]) => k === first)) items.push(["Your first photo", first]);
+    return items;
+  }
+
+  lookbackHTML() {
+    const items = this.lookbackItems();
     const body = items.length ? items.map(([label, k]) => {
       const p = this.s.photos[k];
       return `<div class="lb-item"><div class="lb-label">${label}<span>${dayName(k).slice(0, 3)} ${dm(k)}</span></div>
@@ -624,8 +636,13 @@ class App {
       case "goto": { const all = this.days(); const d = Math.sign(all.indexOf(t.dataset.k) - all.indexOf(this.cur)); this.cur = t.dataset.k; return this.rerenderDetail(false, d); }
       case "edit": this.closeOverlay(true); return this.rerenderDetail(true);
       case "save-caption": {
+        if (this.busy) return;
         const k = this.cur, v = this.top().querySelector("textarea").value.trim();
-        return this.store.setCaption(k, v).then((day) => { s.photos[k] = day; this.rerenderDetail(false); }, (e) => this.toast(e.message));
+        this.busy = true; t.disabled = true;
+        return this.store.setCaption(k, v).then(
+          (day) => { s.photos[k] = day; if (this.cur === k) this.rerenderDetail(false); },
+          (e) => { t.disabled = false; this.toast(e.message); },
+        ).finally(() => { this.busy = false; });
       }
       case "detail-actions": return this.actionSheet("", [["Edit caption", "edit"], ["Replace photo", "replace"], ["Remove photo", "remove-ask", true]]);
       case "replace": this.closeOverlay(true); return this.capture(this.cur, true);

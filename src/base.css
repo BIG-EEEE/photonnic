@@ -16,3 +16,5 @@ html[data-theme="dark"], html[data-theme="dark"] body { background: #121211; }
 
 /* Phone-first; on a tablet or desktop the app keeps a phone-width column. */
 .ph { position: fixed; inset: 0; margin: 0 auto; max-width: 520px; font-family: var(--sf); font-optical-sizing: auto; }
+/* Before the journal has opened and drawn, the empty app area takes the first-paint theme too. */
+html[data-theme="dark"] .ph:empty { background: #121211; }

@@ -13,6 +13,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
   <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <script>
+    // Paint in the right theme before the journal opens (the choice itself lives in IndexedDB).
+    try {
+      var t = localStorage.getItem("photonic-theme");
+      var dark = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+      document.documentElement.style.colorScheme = dark ? "dark" : "light";
+      document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.content = dark ? "#121211" : "#F8F7F4"; });
+    } catch (e) {}
+  </script>
 </head>
 <body>
   <main class="ph" id="ph"></main>
