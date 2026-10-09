@@ -1,0 +1,513 @@
+[
+  {
+    "name": "01-calendar",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 63
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "02-detail",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "9 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 66
+      },
+      "sizes": [
+        28,
+        17,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 3,
+      "accentHues": [],
+      "cards": 1
+    }
+  },
+  {
+    "name": "03-capture-primer",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "7 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 67
+      },
+      "sizes": [
+        28,
+        22,
+        17,
+        15,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 2,
+      "accentHues": [],
+      "cards": 1
+    }
+  },
+  {
+    "name": "04-camera-permission",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 63
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "05-camera",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "7 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 64
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 2,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "06-preview-save",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "9 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 67
+      },
+      "sizes": [
+        28,
+        17,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 4,
+      "accentHues": [],
+      "cards": 2
+    }
+  },
+  {
+    "name": "08-preview-replace",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "31 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "8 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 68
+      },
+      "sizes": [
+        28,
+        17,
+        15,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "700"
+      ],
+      "leftEdges": 4,
+      "accentHues": [],
+      "cards": 2
+    }
+  },
+  {
+    "name": "09-library-picker",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "7 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 64
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 2,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "10-remove-confirm",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "10 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 69
+      },
+      "sizes": [
+        28,
+        17,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 4,
+      "accentHues": [
+        0
+      ],
+      "cards": 2
+    }
+  },
+  {
+    "name": "11-empty",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"1\"; 1.94:1 12px \"2\"; 1.94:1 12px \"3\"; 1.94:1 12px \"4\"; 1.94:1 12px \"5\""
+    ],
+    "warns": [],
+    "facts": {
+      "fonts": {
+        "SF Pro": 39
+      },
+      "sizes": [
+        28,
+        22,
+        17,
+        15,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "12-more-menu",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "9 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 66
+      },
+      "sizes": [
+        28,
+        17,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 2,
+      "accentHues": [],
+      "cards": 1
+    }
+  },
+  {
+    "name": "13-settings",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "3 gradients. Gradients are a seasoning, not a surface treatment.",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything.",
+      "10 elements cast shadows. Depth should come from one or two layers, not every tile."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 79
+      },
+      "sizes": [
+        28,
+        17,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 2,
+      "accentHues": [],
+      "cards": 3
+    }
+  },
+  {
+    "name": "14-camera-denied",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 68
+      },
+      "sizes": [
+        28,
+        22,
+        17,
+        15,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 3,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "15-look-back",
+    "fails": [],
+    "warns": [],
+    "facts": {
+      "fonts": {
+        "SF Pro": 7
+      },
+      "sizes": [
+        28,
+        15,
+        13
+      ],
+      "weights": [
+        "400",
+        "600",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "16-calendar-dark",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.99:1 12px \"10\"; 1.99:1 12px \"11\"; 1.99:1 12px \"12\"; 1.99:1 12px \"13\"; 1.99:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"20\" (home indicator); \"21\" (home indicator); \"22\" (home indicator)",
+      "30 icon-in-tinted-square chips. If every row has one, none of them mean anything."
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 63
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  },
+  {
+    "name": "17-calendar-pro-max",
+    "fails": [
+      "Contrast below WCAG on solid ground: 1.94:1 12px \"10\"; 1.94:1 12px \"11\"; 1.94:1 12px \"12\"; 1.94:1 12px \"13\"; 1.94:1 12px \"14\""
+    ],
+    "warns": [
+      "Text inside the system's safe areas: \"3\" (home indicator)"
+    ],
+    "facts": {
+      "fonts": {
+        "SF Pro": 70
+      },
+      "sizes": [
+        28,
+        13,
+        12,
+        11
+      ],
+      "weights": [
+        "400",
+        "500",
+        "600",
+        "650",
+        "700"
+      ],
+      "leftEdges": 1,
+      "accentHues": [],
+      "cards": 0
+    }
+  }
+]

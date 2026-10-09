@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#F8F7F4">
+<title>Photonic prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="vendor/device.css">
+<link rel="stylesheet" href="app.css">
+<style>
+  body { display: flex; gap: 48px; justify-content: center; align-items: flex-start; min-height: 100vh;
+    padding: 40px 24px; background: #E4E2DD; font-family: "Inter", system-ui, sans-serif; color: #1C1B19; }
+  .screen { box-shadow: 0 0 0 11px #1C1B19, 0 0 0 12px #3A3936, 0 30px 80px rgba(0,0,0,.25); margin: 12px; }
+  aside { width: 300px; font-size: 14px; line-height: 20px; }
+  aside h1 { font-size: 20px; margin: 8px 0 4px; letter-spacing: -.3px; }
+  aside p { color: #5C5A55; margin: 0 0 16px; }
+  aside ol { padding-left: 20px; margin: 0 0 20px; color: #3A3936; }
+  aside li { margin: 3px 0; }
+  aside .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  aside button, aside label { font: 600 13px/1 "Inter", system-ui; padding: 10px 12px; border-radius: 10px; border: 1px solid #CFCCC5; background: #fff; cursor: pointer; color: #1C1B19; }
+  aside small { display: block; color: #6F6D68; }
+  /* On a real phone the prototype fills the screen and uses the real status bar. */
+  @media (max-width: 520px) {
+    body { padding: 0; display: block; background: #F8F7F4; }
+    aside { display: none; }
+    .screen { width: 100vw; height: 100dvh; border-radius: 0; margin: 0; box-shadow: none; }
+    .screen .ac-status, .screen .ac-island, .screen .ac-home { display: none; }
+  }
+</style>
+</head>
+<body>
+  <section class="screen" data-name="prototype" data-time="3:06"><div class="ph" id="ph"></div></section>
+  <aside>
+    <h1>Photonic</h1>
+    <p>Navigable prototype. Today is Thursday 9 October 2026 and no photo has been taken yet.</p>
+    <ol>
+      <li>Tap any photo to open it. Swipe it, use the arrows or the strip</li>
+      <li>Back returns the photo to its square</li>
+      <li>Tap Capture (the header or the middle tab)</li>
+      <li>Continue, then Allow camera access</li>
+      <li>Press the shutter, or the library thumbnail</li>
+      <li>Add a caption, then Save to 9 Oct</li>
+      <li>The photo lands in today's square</li>
+      <li>Capture again to see the replace flow</li>
+      <li>Tap a past empty day (6 Oct) to fill it from the library</li>
+      <li>More, then Settings</li>
+    </ol>
+    <div class="btns">
+      <button onclick="app.reset(false)">Reset demo</button>
+      <button onclick="app.reset(true)">Empty state</button>
+      <button onclick="toggleTheme()">Light / dark</button>
+      <label>Use a photo from this device<input type="file" accept="image/*" hidden onchange="useFile(this)"></label>
+    </div>
+    <small>Sample photos: Unsplash via picsum.photos. Settings links and Export are shown but do not leave the prototype.</small>
+  </aside>
+  <script src="app.js"></script>
+  <script>
+    const ph = document.getElementById("ph");
+    const app = Photonic.mount(ph, { base: "photos/" });
+    const scr = document.querySelector(".screen");
+    function setTheme(dark) { dark ? (scr.dataset.theme = "dark") : delete scr.dataset.theme; }
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    setTheme(mq.matches); mq.addEventListener("change", (e) => setTheme(e.matches));
+    function toggleTheme() { setTheme(scr.dataset.theme !== "dark"); }
+    function useFile(input) {
+      const f = input.files[0]; if (!f) return;
+      const r = new FileReader(); r.onload = () => app.addDevicePhoto(r.result); r.readAsDataURL(f); input.value = "";
+    }
+  </script>
+  <script src="vendor/device.js"></script>
+</body>
+</html>

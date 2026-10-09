@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-demo/
+test-results/
+prototype.zip
+# design scratch and superseded render rounds
+_work/*
+!_work/ref.jpg
+!_work/zoom.png
+!_work/zoom2.png
+!_work/journey.mjs
+!_work/snap.mjs
+shots/*
+!shots/r5/
+!shots/r5-se/

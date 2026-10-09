@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Photonic screens</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="prototype/vendor/device.css">
+<link rel="stylesheet" href="prototype/app.css">
+<style>
+  .board { position: absolute; inset: 0; background: #EDEBE6; display: flex; gap: 22px; align-items: center; justify-content: center; padding: 0 20px; }
+  .board .cap { position: absolute; left: 0; right: 0; bottom: 70px; text-align: center; font: 500 13px/18px var(--sf); color: #4A4845; padding: 0 30px; }
+  .app-icon .tile { position: absolute; inset: 58px; border-radius: 52px; overflow: hidden; box-shadow: 0 6px 18px rgba(28,27,25,.18); }
+  .app-icon .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .app-icon .tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(transparent 50%, rgba(0,0,0,.45)); }
+  .app-icon .tile b { position: absolute; left: 0; right: 0; bottom: 24px; text-align: center; z-index: 1; color: #fff; font: 700 54px/1 var(--sf); letter-spacing: -1px; }
+</style>
+</head>
+<body>
+  <section class="screen" data-name="01-calendar" data-time="3:06"><div class="ph" data-spec='{}'></div></section>
+  <section class="screen" data-name="02-detail" data-time="3:06"><div class="ph" data-spec='{"view":"detail","date":"2026-10-07"}'></div></section>
+  <section class="screen" data-name="03-capture-primer" data-time="3:06"><div class="ph" data-spec='{"overlay":"primer","layerBehind":true}'></div></section>
+  <section class="screen" data-name="04-camera-permission" data-time="3:06"><div class="ph" data-spec='{"overlay":"alert","layerBehind":true}'></div></section>
+  <section class="screen" data-name="05-camera" data-time="3:06"><div class="ph" data-spec='{"perm":"granted","view":"camera"}'></div></section>
+  <section class="screen" data-name="06-preview-save" data-time="3:07"><div class="ph" data-spec='{"perm":"granted","view":"preview","photo":129,"caption":"Lunch on the bench with Ama"}'></div></section>
+  <section class="screen" data-name="07-save-moment" data-chrome="none">
+    <div class="board">
+      <div class="mini" style="--mini:.27"><div class="mini-screen" data-time="3:07"><div class="ph" data-spec='{"perm":"granted","view":"preview","photo":129,"caption":"Lunch on the bench with Ama"}'></div></div></div>
+      <div class="mini" style="--mini:.27"><div class="mini-screen" data-time="3:07"><div class="ph" data-spec='{"todayPhoto":129,"flight":0.55}'></div></div></div>
+      <div class="mini" style="--mini:.27"><div class="mini-screen" data-time="3:07"><div class="ph" data-spec='{"todayPhoto":129,"toast":"Saved to 9 October"}'></div></div></div>
+      <p class="cap">Save: the photo shrinks from the preview straight into today's square (0.46 s, no overshoot), the square settles with a light haptic, and the Capture dot clears.</p>
+    </div>
+  </section>
+  <section class="screen" data-name="08-preview-replace" data-time="3:12"><div class="ph" data-spec='{"perm":"granted","todayPhoto":129,"view":"preview","photo":167,"from":"library"}'></div></section>
+  <section class="screen" data-name="09-library-picker" data-time="3:12" data-chrome="light" data-home="dark"><div class="ph" data-spec='{"perm":"granted","view":"camera","overlay":"picker"}'></div></section>
+  <section class="screen" data-name="10-remove-confirm" data-time="3:06"><div class="ph" data-spec='{"view":"detail","date":"2026-10-07","overlay":"remove"}'></div></section>
+  <section class="screen" data-name="11-empty" data-time="3:06"><div class="ph" data-spec='{"empty":true}'></div></section>
+  <section class="screen" data-name="12-more-menu" data-time="3:06"><div class="ph" data-spec='{"overlay":"menu"}'></div></section>
+  <section class="screen" data-name="13-settings" data-time="3:06"><div class="ph" data-spec='{"perm":"granted","view":"settings"}'></div></section>
+  <section class="screen" data-name="14-camera-denied" data-time="3:06"><div class="ph" data-spec='{"perm":"denied","view":"camera"}'></div></section>
+  <section class="screen" data-name="15-look-back" data-time="3:06"><div class="ph" data-spec='{"tab":"lookback"}'></div></section>
+  <section class="screen" data-name="16-calendar-dark" data-time="3:06" data-theme="dark"><div class="ph" data-theme="dark" data-spec='{}'></div></section>
+  <section class="screen" data-name="17-calendar-pro-max" data-time="3:06" style="width:440px;height:956px"><div class="ph" data-spec='{}'></div></section>
+  <section class="app-icon" data-name="icon" style="background:#F8F7F4"><div class="tile"><img src="prototype/photos/p110.jpg" alt=""><b>9</b></div></section>
+
+  <script src="prototype/app.js"></script>
+  <script>
+    for (const ph of document.querySelectorAll(".ph[data-spec]")) {
+      const spec = JSON.parse(ph.dataset.spec);
+      const app = Photonic.mount(ph, { base: "prototype/photos/", still: true, ...spec });
+      if (spec.toast) app.toast(spec.toast);
+      if (spec.flight != null) {
+        // A frozen frame of the save flight: between the preview photo and today's square.
+        const cell = ph.querySelector(".day.today"); cell.style.visibility = "hidden";
+        const a = { l: 16, t: 118, w: 370, h: 470 };
+        const b = { l: cell.offsetLeft + cell.offsetParent.offsetLeft, t: 0, w: cell.offsetWidth, h: cell.offsetHeight };
+        const pr = ph.getBoundingClientRect(), cr = cell.getBoundingClientRect(), s = pr.width / ph.offsetWidth;
+        b.l = (cr.left - pr.left) / s; b.t = (cr.top - pr.top) / s;
+        const k = spec.flight, mix = (x, y) => x + (y - x) * k;
+        const f = document.createElement("div");
+        f.className = "flyer";
+        Object.assign(f.style, { left: mix(a.l, b.l) + "px", top: mix(a.t, b.t) + "px", width: mix(a.w, b.w) + "px", height: mix(a.h, b.h) + "px", borderRadius: mix(22, 12) + "px" });
+        f.innerHTML = '<img src="prototype/photos/p129.jpg" alt="">';
+        ph.append(f);
+      }
+    }
+  </script>
+  <script src="prototype/vendor/device.js"></script>
+</body>
+</html>
