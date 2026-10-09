@@ -87,12 +87,17 @@ export async function processPhoto(file) {
   }
 }
 
-/* A thumbnail from an already-stored full image (to repair a missing one). */
-export async function thumbFrom(blob) {
+/* Decode an already-saved image (a stored photo or one from a backup): proves it is a
+ * real picture and returns its size and a new thumbnail. */
+export async function inspectImage(blob) {
   const d = await decode(blob);
-  try { const [tw, th] = fitShort(d.w, d.h, THUMB_SHORT); return await encode(d.src, tw, th); }
-  finally { d.done(); }
+  try {
+    if (!d.w || !d.h) throw new PhotoError("decode", "That photo couldn’t be opened.");
+    const [tw, th] = fitShort(d.w, d.h, THUMB_SHORT);
+    return { thumb: await encode(d.src, tw, th), width: d.w, height: d.h };
+  } finally { d.done(); }
 }
+export const thumbFrom = async (blob) => (await inspectImage(blob)).thumb;
 
 /* Capture date and GPS position from the original file, read before re-encoding
  * strips them. Missing or unreadable metadata is normal (pickers often strip it). */

@@ -68,8 +68,8 @@ function toRecord(input, prev) {
       lat: rest.lat ?? null,
       lng: rest.lng ?? null,
       locationSource: rest.lat != null ? rest.locationSource : null, // exif | device
-      createdAt: prev?.createdAt || now,
-      updatedAt: now,
+      createdAt: rest.createdAt || prev?.createdAt || now,
+      updatedAt: rest.updatedAt || now,
     },
     image: { date: rest.date, blob: image },
   };
@@ -141,6 +141,25 @@ export async function openIdbStore(name = DB_NAME) {
         if (u.image) await tx.objectStore("images").put(u.image);
         await tx.objectStore("undo").delete(date);
         return u.day;
+      });
+    },
+
+    /* Restore many days in ONE transaction: all of them land, or (quota, crash, any
+     * failure) none do. mode "keep" skips days that already have a photo; "replace"
+     * overwrites them. Returns { added, replaced, kept }. */
+    async importMany(inputs, mode = "keep") {
+      return run(["days", "images"], async (tx) => {
+        const days = tx.objectStore("days"), images = tx.objectStore("images");
+        const n = { added: 0, replaced: 0, kept: 0 };
+        for (const input of inputs) {
+          const existing = await days.get(input.date);
+          if (existing && mode !== "replace") { n.kept++; continue; }
+          const { day, image } = toRecord(input, existing);
+          await days.put(day);
+          await images.put(image);
+          existing ? n.replaced++ : n.added++;
+        }
+        return n;
       });
     },
 
@@ -246,6 +265,17 @@ export function createMemoryStore(initial = []) {
       const next = { ...d, caption }; days.set(date, next); return next;
     },
     async setThumb(date, thumb) { const d = days.get(date); if (d) days.set(date, { ...d, thumb }); return days.get(date) || null; },
+    async importMany(inputs, mode = "keep") {
+      const n = { added: 0, replaced: 0, kept: 0 };
+      for (const input of inputs) {
+        const existing = days.get(input.date);
+        if (existing && mode !== "replace") { n.kept++; continue; }
+        const { day, image } = toRecord(input, existing);
+        days.set(day.date, day); images.set(day.date, image.blob);
+        existing ? n.replaced++ : n.added++;
+      }
+      return n;
+    },
     async remove(date) { days.delete(date); images.delete(date); undo.delete(date); },
     async clear() { days.clear(); images.clear(); undo.clear(); },
     async getSetting(key, fallback = null) { return settings.has(key) ? settings.get(key) : fallback; },

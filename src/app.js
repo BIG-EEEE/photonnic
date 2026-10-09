@@ -7,7 +7,8 @@
  * Capture uses the phone's own camera and photo picker (file inputs); nothing is uploaded.
  */
 import { key, keyOf, todayKey, parseKey as parse, reliableKey } from "./dates.js";
-import { processPhoto, readMeta, deviceLocation, thumbFrom, PhotoError } from "./image.js";
+import { processPhoto, readMeta, deviceLocation, thumbFrom, inspectImage, PhotoError } from "./image.js";
+import { buildBackup, parseBackup, backupName, BackupError } from "./backup.js";
 import { requestPersistence } from "./store.js";
 
 // ---------- Icons (SF Symbols-style, one stroke weight) ----------
@@ -279,12 +280,13 @@ class App {
     setTimeout(() => { scrim.remove(); box.remove(); }, 260);
   }
 
-  toast(text, undo) {
+  toast(text, undo, stay = false) {
     this.ph.querySelector(".toast")?.remove();
     const t = this.el(`<div class="toast${undo ? "" : " solo"} fade-in" role="status">${esc(text)}${undo ? `<button data-a="undo">Undo</button>` : ""}</div>`);
     this.ph.append(t);
     this.undoFn = undo || null;
     clearTimeout(this.tt);
+    if (stay) return t;
     this.tt = setTimeout(() => { t.classList.replace("fade-in", "fade-out"); setTimeout(() => t.remove(), 220); this.undoFn = null; }, undo ? 4200 : 2400);
   }
 
@@ -548,8 +550,9 @@ class App {
       <div class="group">
         <div class="row">On this phone<span class="v">${n} ${n === 1 ? "photo" : "photos"}</span></div>
         <button class="row press" data-a="export"${n ? "" : " disabled"}>Export all photos<span class="v">${chev}</span></button>
+        <button class="row press" data-a="restore">Restore from backup<span class="v">${chev}</span></button>
       </div>
-      <p class="group-foot">No account and no servers: your photos are kept only in this app on this phone. Export a backup before you change phones or clear your browser’s data.</p>
+      <p class="group-foot">No account and no servers: your photos are kept only in this app on this phone. Export a backup now and then, and before you change phones or clear your browser’s data, and keep it somewhere you trust.</p>
       <div class="group-label" id="about">About</div>
       <div class="group">
         <div class="row">Version<span class="v">1.0 (1)</span></div>
@@ -615,6 +618,10 @@ class App {
     };
     this.camInput = input(true);
     this.libInput = input(false);
+    this.zipInput = Object.assign(document.createElement("input"), { type: "file", accept: ".zip,application/zip,application/x-zip-compressed", hidden: true });
+    this.zipInput.dataset.input = "backup";
+    this.zipInput.addEventListener("change", () => { const f = this.zipInput.files && this.zipInput.files[0]; this.zipInput.value = ""; if (f) this.readBackup(f); });
+    document.body.append(this.zipInput);
     // Past midnight with the app open: today moves on.
     document.addEventListener("visibilitychange", () => {
       if (document.hidden || this.fixedToday) return;
@@ -675,8 +682,11 @@ class App {
       case "menu": return this.menu();
       case "settings": return this.openSettings();
       case "about": return this.openSettings(true);
-      // Backup and restore arrive in M5; until then say so rather than pretend.
-      case "export": this.closeOverlay(true); return this.toast("Export arrives in the next update");
+      case "export": this.closeOverlay(true); return this.exportBackup();
+      case "backup-share": return this.shareBackup();
+      case "backup-download": return this.downloadBackup();
+      case "restore": this.closeOverlay(true); if (!this.busy) this.zipInput.click(); return;
+      case "restore-keep": case "restore-replace": return this.commitRestore(a === "restore-replace" ? "replace" : "keep");
       case "theme": {
         s.theme = t.dataset.v;
         this.applyTheme();
@@ -702,8 +712,128 @@ class App {
       }
       case "shuffle": { const all = this.days(); return this.openDetail(all[Math.floor(Math.random() * all.length)]); }
       case "undo": { const f = this.undoFn; this.ph.querySelector(".toast")?.remove(); this.undoFn = null; return f && f(); }
-      case "dismiss": this.pending = null; return this.closeOverlay();
+      case "dismiss":
+        this.pending = null;
+        this.backupFile = null;
+        if (this.restoring) { this.restoring = null; this.closeOverlay(); return this.toast("Restore cancelled. Nothing was changed."); }
+        return this.closeOverlay();
     }
+  }
+
+  // ----- Backup (M5): made and read on the phone; nothing is uploaded -----
+  async exportBackup() {
+    if (this.busy) return;
+    const n = this.count();
+    if (!n) return this.toast("No photos to back up yet.");
+    this.busy = true;
+    const msg = this.toast(`Preparing backup… 0 of ${n}`, null, true);
+    try {
+      const days = await this.store.list();
+      const blob = await buildBackup(days, (d) => this.store.getImage(d), {
+        today: this.s.today,
+        onProgress: (i, total) => { msg.textContent = `Preparing backup… ${i} of ${total}`; },
+      });
+      this.backupFile = new File([blob], backupName(this.s.today), { type: "application/zip" });
+    } catch (e) {
+      this.busy = false;
+      return this.toast(e instanceof BackupError ? e.message : "The backup couldn’t be made. Try again.");
+    }
+    this.busy = false;
+    msg.remove();
+    const size = `${(this.backupFile.size / 1048576).toFixed(1)} MB`;
+    const canShare = !!(navigator.canShare && navigator.canShare({ files: [this.backupFile] }));
+    // Sharing needs a fresh tap, so the finished backup waits for one.
+    return this.actionSheet(`Backup ready: ${n} ${n === 1 ? "photo" : "photos"}, ${size}. Choose where to keep it.`,
+      canShare ? [["Share…", "backup-share"], ["Download", "backup-download"]] : [["Download", "backup-download"]]);
+  }
+  async shareBackup() {
+    const file = this.backupFile;
+    this.closeOverlay(true);
+    if (!file) return;
+    try {
+      await navigator.share({ files: [file], title: "Photonic backup" });
+      this.backupFile = null;
+      this.toast("Backup sent. Check it arrived where you chose.");
+    } catch (e) {
+      if (e?.name === "AbortError") { this.backupFile = null; return this.toast("Not shared. The backup wasn’t saved anywhere."); }
+      this.downloadBackup(file); // sharing refused: fall back to a download
+    }
+  }
+  downloadBackup(file = this.backupFile) {
+    this.closeOverlay(true);
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const a = Object.assign(document.createElement("a"), { href: url, download: file.name, hidden: true });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    this.backupFile = null;
+    this.toast(`Download started: ${file.name}`);
+  }
+
+  // Restore: read and check the whole archive first; only then ask, then write once.
+  async readBackup(file) {
+    if (this.busy) return;
+    this.busy = true;
+    const msg = this.toast("Checking backup…", null, true);
+    let records;
+    try {
+      const { entries } = parseBackup(new Uint8Array(await file.arrayBuffer()), { today: this.s.today });
+      records = [];
+      for (let i = 0; i < entries.length; i++) {
+        const e = entries[i];
+        msg.textContent = `Checking backup… ${i + 1} of ${entries.length}`;
+        const image = new Blob([e.bytes], { type: e.type });
+        let info;
+        try { info = await inspectImage(image); }
+        catch { throw new BackupError("image", `The photo for ${dm(e.date)} in that backup can’t be opened. Nothing was changed.`); }
+        const { bytes, type, ...meta } = e;
+        records.push({ ...meta, image, thumb: info.thumb, width: info.width, height: info.height });
+      }
+    } catch (e) {
+      this.busy = false;
+      return this.toast(e instanceof BackupError ? e.message : "That backup couldn’t be read. Nothing was changed.");
+    }
+    this.busy = false;
+    msg.remove();
+    this.restoring = records;
+    const n = records.length;
+    const clash = records.filter((r) => this.s.photos[r.date]).map((r) => r.date);
+    const photos = (k) => `${k} ${k === 1 ? "photo" : "photos"}`;
+    if (!clash.length) return this.actionSheet(`Restore ${photos(n)} from this backup?`, [[`Restore ${photos(n)}`, "restore-keep"]]);
+    const which = clash.length <= 3 ? clash.map(dm).join(", ").replace(/, ([^,]*)$/, " and $1") : `${clash.length} of the ${n} days`;
+    // One question covers every clash, so a big backup never means a dialog per day.
+    return this.actionSheet(`${which} already ${clash.length === 1 ? "has a photo" : "have photos"} here. Which should Photonic keep?`,
+      [["Keep my photos", "restore-keep"], ["Use the backup’s photos", "restore-replace", true]]);
+  }
+  async commitRestore(mode) {
+    const records = this.restoring;
+    this.restoring = null;
+    this.closeOverlay(true);
+    if (!records || this.busy) return;
+    this.busy = true;
+    const msg = this.toast("Restoring…", null, true);
+    let n;
+    try { n = await this.store.importMany(records, mode); }
+    catch (e) {
+      this.busy = false;
+      return this.toast(`${e.message || "The restore failed."} Nothing was changed.`);
+    }
+    this.busy = false;
+    msg.remove();
+    const before = this.s.photos;
+    this.s.photos = byDate(await this.store.list());
+    for (const k of Object.keys(before)) if (before[k] !== this.s.photos[k]) this.forget(before[k]);
+    this.renderBase();
+    if (this.top()?.dataset.view === "settings") {
+      const sc = this.top().querySelector(".scroll"), y = sc.scrollTop;
+      this.top().innerHTML = this.settingsHTML();
+      this.top().querySelector(".scroll").scrollTop = y;
+    }
+    const total = n.added + n.replaced;
+    const parts = [`Restored ${total} ${total === 1 ? "photo" : "photos"}`];
+    if (n.replaced) parts.push(`replaced ${n.replaced} of yours`);
+    if (n.kept) parts.push(`kept ${n.kept} of yours`);
+    this.toast(parts.join(", "));
   }
 
   // A stored day whose thumbnail is missing gets a new one from its full image.
