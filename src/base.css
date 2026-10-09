@@ -10,6 +10,9 @@
 html, body { margin: 0; height: 100%; background: #F8F7F4; overscroll-behavior: none; }
 body { -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; text-rendering: optimizeLegibility; }
 @media (prefers-color-scheme: dark) { html, body { background: #121211; } }
+/* The Settings choice wins over the system once the app has started. */
+html[data-theme="light"], html[data-theme="light"] body { background: #F8F7F4; }
+html[data-theme="dark"], html[data-theme="dark"] body { background: #121211; }
 
 /* Phone-first; on a tablet or desktop the app keeps a phone-width column. */
 .ph { position: fixed; inset: 0; margin: 0 auto; max-width: 520px; font-family: var(--sf); font-optical-sizing: auto; }

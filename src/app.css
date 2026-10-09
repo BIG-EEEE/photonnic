@@ -307,3 +307,15 @@ button.day::before { content: ""; position: absolute; inset: calc(var(--cell-gap
 .switch.on { background: var(--ink); }
 .switch.on::after { transform: translateX(20px); background: var(--ground); }
 @media (prefers-reduced-motion: reduce) { .switch, .switch::after { transition: none; } }
+
+/* ---- Segmented control (Settings: appearance) ---- */
+.row.seg-row { padding: 9px 10px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; width: 100%; padding: 2px; border-radius: 11px; background: var(--tile); }
+.seg button { height: 34px; border-radius: 9px; font-size: 15px; letter-spacing: -.2px; color: var(--ink-2); transition: background .2s ease, color .2s ease; }
+.seg button[aria-checked="true"] { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(28, 27, 25, .12), 0 0 0 .5px var(--hairline); }
+.seg button:active { opacity: .7; }
+@media (prefers-reduced-motion: reduce) { .seg button { transition: none; } }
+/* Dark: the track and the selected segment need their own steps to read on a dark row. */
+.ph[data-theme="dark"] .seg { background: var(--ground); }
+.ph[data-theme="dark"] .seg button[aria-checked="true"] { background: #3A3936; }
+.ph[data-theme="dark"] .switch:not(.on) { background: #3A3936; }

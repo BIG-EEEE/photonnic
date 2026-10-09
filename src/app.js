@@ -54,6 +54,7 @@ class App {
       today: opts.today || todayKey(),
       photos: byDate(opts.days || []),
       locate: !!opts.locate,
+      theme: opts.theme || "system", // system | light | dark
       tab: "calendar",
     };
     this.urls = new WeakMap();   // Blob -> object URL
@@ -64,7 +65,20 @@ class App {
     this.baseLayer = this.el(`<div class="layer"></div>`);
     ph.append(this.baseLayer);
     this.renderBase();
+    // Appearance: follow the phone unless the user picked Light or Dark in Settings.
+    this.mq = matchMedia("(prefers-color-scheme: dark)");
+    this.mq.addEventListener("change", () => this.applyTheme());
+    this.applyTheme();
     if (!opts.still) this.wire();
+  }
+
+  applyTheme() {
+    const dark = this.s.theme === "dark" || (this.s.theme === "system" && this.mq.matches);
+    if (dark) this.ph.dataset.theme = "dark"; else delete this.ph.dataset.theme;
+    const root = document.documentElement;
+    root.dataset.theme = dark ? "dark" : "light";
+    root.style.colorScheme = dark ? "dark" : "light";
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.content = dark ? "#121211" : "#F8F7F4";
   }
 
   // Thumbnails and full images are Blobs (IndexedDB) or plain URLs (demo).
@@ -507,6 +521,11 @@ class App {
     return `<div class="scroll">
       <div class="bar"><button class="circ sm press" data-a="back" aria-label="Back">${I.back}</button><span></span><span></span></div>
       <div class="page-head"><h1>Settings</h1></div>
+      <div class="group-label">Appearance</div>
+      <div class="group">
+        <div class="row seg-row"><div class="seg" role="radiogroup" aria-label="Appearance">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) =>
+          `<button role="radio" aria-checked="${this.s.theme === v}" data-a="theme" data-v="${v}">${l}</button>`).join("")}</div></div>
+      </div>
       <div class="group-label">Camera and location</div>
       <div class="group">
         <button class="row press" role="switch" aria-checked="${this.s.locate}" data-a="toggle-locate">Location for new photos<span class="v"><span class="switch${this.s.locate ? " on" : ""}" aria-hidden="true"></span></span></button>
@@ -641,6 +660,13 @@ class App {
       case "about": return this.openSettings(true);
       // Backup and restore arrive in M5; until then say so rather than pretend.
       case "export": this.closeOverlay(true); return this.toast("Export arrives in the next update");
+      case "theme": {
+        s.theme = t.dataset.v;
+        this.applyTheme();
+        this.store.setSetting("theme", s.theme).catch(() => {});
+        this.top().querySelectorAll('[data-a="theme"]').forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === s.theme)));
+        return this.haptic(5);
+      }
       case "toggle-locate": {
         s.locate = !s.locate;
         this.store.setSetting("locate", s.locate).catch(() => {});

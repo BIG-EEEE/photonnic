@@ -31,16 +31,11 @@ const app = mount(ph, {
   store,
   days: await store.list(),
   locate: await store.getSetting("locate", false),
+  theme: await store.getSetting("theme", "system"),
   ...extra,
 });
 if (problem) app.toast(problem);
 app.repairThumbs();
 
-// Follow the system appearance.
-const mq = matchMedia("(prefers-color-scheme: dark)");
-const setTheme = (dark) => (dark ? (ph.dataset.theme = "dark") : delete ph.dataset.theme);
-setTheme(mq.matches);
-mq.addEventListener("change", (e) => setTheme(e.matches));
-
 // Hooks for the test suite, demo mode only.
-if (demo) Object.assign(window, { app, toggleTheme: () => setTheme(ph.dataset.theme !== "dark") });
+if (demo) Object.assign(window, { app, toggleTheme: () => { app.s.theme = ph.dataset.theme === "dark" ? "light" : "dark"; app.applyTheme(); } });

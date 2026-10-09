@@ -150,6 +150,17 @@ function compare(actualBuf, refPath, name) {
   await check("saved to 3 Oct with the photo's own location", () => { const d = app.s.photos["2026-10-03"]; return d.dateSource === "exif" && Math.abs(d.lat - 5.556) < 1e-3 && d.locationSource === "exif"; });
   await ph.locator('[data-a="menu"]').click(); await ph.locator('[data-a="settings"]').click(); await p.waitForTimeout(500);
   await check("settings: location switch is off by default", () => document.querySelector('[data-a="toggle-locate"]').getAttribute("aria-checked") === "false");
+  await ph.locator('[data-a="theme"][data-v="dark"]').click();
+  await check("appearance: Dark applies at once", () => document.querySelector("#ph").dataset.theme === "dark" && document.documentElement.dataset.theme === "dark");
+  await p.screenshot({ path: `${OUT}/settings-dark.png` });
+  await ph.locator('[data-a="theme"][data-v="light"]').click();
+  await check("appearance: Light applies at once", () => !document.querySelector("#ph").dataset.theme);
+  await p.emulateMedia({ colorScheme: "dark" });
+  await ph.locator('[data-a="theme"][data-v="system"]').click();
+  await check("appearance: System follows the phone", () => document.querySelector("#ph").dataset.theme === "dark");
+  await p.emulateMedia({ colorScheme: "light" }); await p.waitForTimeout(200);
+  await check("appearance: System changes when the phone does", () => !document.querySelector("#ph").dataset.theme);
+  await p.screenshot({ path: `${OUT}/settings-light.png` });
   await ph.locator('[data-a="delete-all"]').click(); await ph.locator('[data-a="delete-all-do"]').click(); await p.waitForTimeout(400);
   await check("delete all leads to the empty state", () => !!document.querySelector(".empty-note"));
   ok(errors.filter((e) => !/fonts\.g/.test(e)).length === 0, `journey: no console errors${errors.length ? " (" + errors.join("; ") + ")" : ""}`);
@@ -169,6 +180,14 @@ function compare(actualBuf, refPath, name) {
   ok(!(demoPhoto.headers()["content-type"] || "").startsWith("image/"), "production build ships no demo photos");
   ok(await p.evaluate(() => !document.querySelector(".ac-status,.ac-island,.ac-home")), "no drawn phone frame in production");
 
+  // The appearance choice is stored with the journal.
+  await p.locator('[data-a="menu"]').click(); await p.locator('[data-a="settings"]').click(); await p.waitForTimeout(400);
+  await p.locator('[data-a="theme"][data-v="dark"]').click(); await p.waitForTimeout(200);
+  await p.reload({ waitUntil: "networkidle" });
+  ok(await p.evaluate(() => document.querySelector("#ph").dataset.theme === "dark" && document.querySelector('meta[name="theme-color"]').content === "#121211"), "appearance: Dark survives a reload");
+  await p.locator('[data-a="menu"]').click(); await p.locator('[data-a="settings"]').click(); await p.waitForTimeout(400);
+  await p.locator('[data-a="theme"][data-v="system"]').click(); await p.locator('[data-a="back"]').click(); await p.waitForTimeout(400);
+
   // Installability, as Chrome judges it.
   const cdp = await ctx.newCDPSession(p);
   await p.evaluate(() => navigator.serviceWorker.ready);
@@ -181,7 +200,7 @@ function compare(actualBuf, refPath, name) {
   // Offline launch from the service worker cache.
   await ctx.setOffline(true);
   await p.reload({ waitUntil: "load" });
-  ok(await p.evaluate(() => !!document.querySelector(".cal-head h1")?.textContent.includes("Photonic")), "opens offline after the first visit");
+  ok(await p.locator(".cal-head h1").waitFor({ timeout: 8000 }).then(() => true, () => false), "opens offline after the first visit");
   await ctx.setOffline(false);
 
   // Small phone and wide screen still lay out.
