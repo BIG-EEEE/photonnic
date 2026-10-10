@@ -63,7 +63,7 @@ const images = { "2026-10-09": new Blob([jpeg]), "2026-10-03": new Blob([jpeg]),
 const progress = [];
 const blob = await buildBackup(days, async (d) => images[d], { today: "2026-10-09", onProgress: (i, n) => progress.push(`${i}/${n}`) });
 const u8 = new Uint8Array(await blob.arrayBuffer());
-ok(backupName("2026-10-09") === "photonic-backup-2026-10-09.zip", "backup file name");
+ok(backupName("2026-10-09") === "photonnic-backup-2026-10-09.zip", "backup file name");
 ok(progress.join() === "1/3,2/3,3/3", "export reports progress per photo");
 const raw = unzipSync(u8);
 const man = JSON.parse(strFromU8(raw["manifest.json"]));

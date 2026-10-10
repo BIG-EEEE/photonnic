@@ -1,4 +1,4 @@
-/* Photonic backups: a ZIP made and read entirely on the device.
+/* Photonnic backups: a ZIP made and read entirely on the device.
  *
  *   photonic-backup-2026-10-09.zip
  *     photos/2026-10-03.jpg        the saved full image, byte for byte (stored, not recompressed)
@@ -7,7 +7,7 @@
  *
  *   manifest.json
  *   { "format": "photonic-backup", "version": 1, "createdAt": "2026-10-09T15:20:00.000Z",
- *     "app": "Photonic 1.0", "count": 2,
+ *     "app": "Photonnic 0.2.0", "count": 2,
  *     "entries": [ { "date": "2026-10-03", "file": "photos/2026-10-03.jpg", "type": "image/jpeg",
  *                    "bytes": 182311, "caption": "…", "takenAt": "2026-10-03T18:20:00" | null,
  *                    "dateSource": "exif", "location": { "lat": 5.556, "lng": -0.182, "source": "exif" } | null,
@@ -38,7 +38,7 @@ export class BackupError extends Error {
 const NOTHING = "Nothing was changed.";
 const fail = (code, message) => { throw new BackupError(code, message); };
 
-export const backupName = (today) => `photonic-backup-${today}.zip`;
+export const backupName = (today) => `photonnic-backup-${today}.zip`;
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const STAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/;
 const EXT = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
@@ -65,7 +65,7 @@ const dm = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(
 
 /* days: stored day records (sorted or not). getImage(date) -> Blob | URL string.
  * Returns a Blob of the whole archive. */
-export async function buildBackup(days, getImage, { today, now = new Date(), onProgress } = {}) {
+export async function buildBackup(days, getImage, { today, now = new Date(), app = "Photonnic", onProgress } = {}) {
   const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : 1));
   const chunks = [];
   let failed = null;
@@ -95,7 +95,7 @@ export async function buildBackup(days, getImage, { today, now = new Date(), onP
     onProgress?.(i + 1, sorted.length);
     await new Promise((r) => setTimeout(r)); // let the progress message paint
   }
-  const manifest = { format: FORMAT, version: VERSION, createdAt: now.toISOString(), app: "Photonic 1.0", count: entries.length, today: today || null, entries };
+  const manifest = { format: FORMAT, version: VERSION, createdAt: now.toISOString(), app, count: entries.length, today: today || null, entries };
   const m = new ZipDeflate("manifest.json", { level: 6 });
   zip.add(m);
   m.push(strToU8(JSON.stringify(manifest, null, 2)), true);
@@ -116,15 +116,15 @@ function migrate(manifest) {
 /* Reads and checks an archive. Returns { manifest, entries } where each entry carries its
  * image bytes. Throws BackupError, and never has side effects. */
 export function parseBackup(u8, { today } = {}) {
-  if (!(u8 instanceof Uint8Array) || u8.length < 22) fail("notbackup", `That file isn’t a Photonic backup. ${NOTHING}`);
+  if (!(u8 instanceof Uint8Array) || u8.length < 22) fail("notbackup", `That file isn’t a Photonnic backup. ${NOTHING}`);
   if (u8.length > LIMITS.archiveBytes) fail("toolarge", `That backup is too large to restore on this phone. ${NOTHING}`);
-  if (!(u8[0] === 0x50 && u8[1] === 0x4b)) fail("notbackup", `That file isn’t a Photonic backup. ${NOTHING}`);
+  if (!(u8[0] === 0x50 && u8[1] === 0x4b)) fail("notbackup", `That file isn’t a Photonnic backup. ${NOTHING}`);
 
   let files, count = 0, total = 0;
   try {
     files = unzipSync(u8, {
       filter(f) {
-        if (UNSAFE(f.name)) fail("unsafe", `That backup contains files Photonic won’t open. ${NOTHING}`);
+        if (UNSAFE(f.name)) fail("unsafe", `That backup contains files Photonnic won’t open. ${NOTHING}`);
         if (++count > LIMITS.files + 1) fail("toolarge", `That backup has too many files. ${NOTHING}`);
         const limit = f.name === "manifest.json" ? 20 * 1024 * 1024 : LIMITS.imageBytes;
         if (f.originalSize > limit) fail("toolarge", `A file in that backup is too large. ${NOTHING}`);
@@ -138,12 +138,12 @@ export function parseBackup(u8, { today } = {}) {
     fail("corrupt", `That backup is damaged and can’t be read. ${NOTHING}`);
   }
 
-  if (!files["manifest.json"]) fail("notbackup", `That file isn’t a Photonic backup. ${NOTHING}`);
+  if (!files["manifest.json"]) fail("notbackup", `That file isn’t a Photonnic backup. ${NOTHING}`);
   let manifest;
   try { manifest = JSON.parse(strFromU8(files["manifest.json"])); } catch { fail("corrupt", `That backup is damaged and can’t be read. ${NOTHING}`); }
-  if (!manifest || manifest.format !== FORMAT) fail("notbackup", `That file isn’t a Photonic backup. ${NOTHING}`);
+  if (!manifest || manifest.format !== FORMAT) fail("notbackup", `That file isn’t a Photonnic backup. ${NOTHING}`);
   if (!Number.isInteger(manifest.version) || manifest.version < 1) fail("invalid", `That backup has a problem (unknown version). ${NOTHING}`);
-  if (manifest.version > VERSION) fail("version", `That backup was made by a newer version of Photonic. Update the app, then try again. ${NOTHING}`);
+  if (manifest.version > VERSION) fail("version", `That backup was made by a newer version of Photonnic. Update the app, then try again. ${NOTHING}`);
   manifest = migrate(manifest);
   if (!Array.isArray(manifest.entries)) fail("invalid", `That backup has a problem (no list of photos). ${NOTHING}`);
   if (!manifest.entries.length) fail("empty", `That backup has no photos in it. ${NOTHING}`);
@@ -173,7 +173,7 @@ export function parseBackup(u8, { today } = {}) {
     if (!bytes) fail("missing", `That backup is missing the photo for ${dm(e.date)}. ${NOTHING}`);
     if (!bytes.length || bytes.length > LIMITS.imageBytes) bad(`the photo for ${dm(e.date)}`);
     const type = sniff(bytes);
-    if (!type) fail("image", `The photo for ${dm(e.date)} in that backup isn’t an image Photonic can open. ${NOTHING}`);
+    if (!type) fail("image", `The photo for ${dm(e.date)} in that backup isn’t an image Photonnic can open. ${NOTHING}`);
     const stamp = (v) => (typeof v === "string" && STAMP.test(v) ? v : null);
     entries.push({
       date: e.date, type, bytes,

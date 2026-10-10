@@ -1,4 +1,4 @@
-// Turns a photo the user picked into what Photonic stores, entirely on the device:
+// Turns a photo the user picked into what Photonnic stores, entirely on the device:
 // a full image (longest side up to 2048 px) and a thumbnail (shortest side about 256 px),
 // both JPEG at 0.85 with the orientation applied and every bit of metadata stripped.
 import { exifDate } from "./dates.js";

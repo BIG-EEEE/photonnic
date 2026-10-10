@@ -13,3 +13,7 @@ _work/*
 shots/*
 !shots/r5/
 !shots/r5-se/
+
+# reminder service secrets and data (created on the server by setup.php)
+server/config.php
+server/data/

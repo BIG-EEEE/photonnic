@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>About Photonnic: a private photo diary, one photo a day</title>
+  <meta name="description" content="Photonnic is a quiet place to keep one photo for each day. Your photos stay on your phone, there is no account, and backups are yours to keep. Made by Emmanuel Oti.">
+  <link rel="canonical" href="https://photonnic.destinyfamily.org/about/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Photonnic">
+  <meta property="og:title" content="Photonnic: your life, one photo at a time">
+  <meta property="og:description" content="A private photo diary: one photo a day, kept on your phone. No account, no feed, no streaks.">
+  <meta property="og:url" content="https://photonnic.destinyfamily.org/about/">
+  <meta property="og:image" content="https://photonnic.destinyfamily.org/about/og.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#F8F7F4" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <script>
+    // Same first-paint theme as the app (the choice made in Photonnic's Settings).
+    try {
+      var t = localStorage.getItem("photonic-theme");
+      if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
+  <link rel="stylesheet" href="./about.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <a class="brand" href="/about/"><img src="/icons/icon-192.png" alt="" width="32" height="32">Photonnic</a>
+    <a class="pill" href="/">Open Photonnic</a>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="hero-text">
+        <p class="eyebrow">A private photo diary</p>
+        <h1>Your life, one photo at a time.</h1>
+        <p class="lede">Photonnic is a quiet place to keep one photo for each day, add a few words when you want, and come back to the moments that matter.</p>
+        <div class="cta-row">
+          <a class="btn primary" href="/">Open Photonnic</a>
+          <a class="btn quiet" href="#privacy">How your photos stay private</a>
+        </div>
+      </div>
+      <figure class="phone hero-phone"><img src="./calendar.jpg" width="720" height="1565" alt="Photonnic’s calendar: October and September 2026, with a photo in almost every day’s square."></figure>
+    </section>
+
+    <section class="band idea">
+      <h2>A diary you can see.</h2>
+      <p>No streaks to protect, no feed to scroll, no likes to count. Just a calendar that fills, square by square, with the days you lived. Miss a day and nothing breaks: it simply waits for you.</p>
+    </section>
+
+    <section class="how" aria-labelledby="how-title">
+      <h2 id="how-title">How it works</h2>
+      <ol class="steps">
+        <li><span class="n">1</span><h3>Capture</h3><p>Tap Capture and take a photo with your phone’s own camera, or choose one you already took. A photo from another day can go to that day.</p></li>
+        <li><span class="n">2</span><h3>Add a few words</h3><p>A caption is optional. One line, a few lines, or none at all.</p></li>
+        <li><span class="n">3</span><h3>Watch the month fill</h3><p>Every photo takes its day’s square. Missed a day? Tap it later and fill it from your library.</p></li>
+        <li><span class="n">4</span><h3>Look back</h3><p>See the same day a month or a year ago, and your very first photo.</p></li>
+      </ol>
+      <div class="shots">
+        <figure class="phone"><img src="./detail.jpg" width="720" height="1565" loading="lazy" alt="A single day opened: a photo of a swing by the water, its caption, and a strip of neighbouring days."><figcaption>One day, its photo and its caption</figcaption></figure>
+        <figure class="phone"><img src="./lookback.jpg" width="720" height="1565" loading="lazy" alt="Look back: the same day a month ago, and the first photo in the journal."><figcaption>Look back to the same day</figcaption></figure>
+        <figure class="phone"><img src="./dark.jpg" width="720" height="1565" loading="lazy" alt="The calendar in dark mode."><figcaption>Light, dark, or as your phone is set</figcaption></figure>
+      </div>
+    </section>
+
+    <section id="privacy" class="band privacy" aria-labelledby="privacy-title">
+      <h2 id="privacy-title">Private by design</h2>
+      <div class="cards">
+        <div><h3>Your photos stay on your phone</h3><p>Photos and captions are saved in Photonnic’s own storage on your device. They are never uploaded: there is no Photonnic server that holds them.</p></div>
+        <div><h3>No account</h3><p>Nothing to sign up for. No email address, no password, no profile.</p></div>
+        <div><h3>Location is your choice</h3><p>Photonnic keeps the location a photo already carries. Adding your current location to new camera photos is off unless you turn it on. Locations stay on your phone too.</p></div>
+        <div><h3>Reminders, minimally</h3><p>If you turn on the daily reminder, your browser gives the Photonnic reminder server an anonymous delivery address, with your reminder time and time zone. If you also choose “skip once today’s photo is in”, it learns the date of your latest photo: never the photo. Turning reminders off deletes this.</p></div>
+        <div><h3>No tracking</h3><p>Neither this page nor the app uses analytics, advertising or tracking scripts.</p></div>
+        <div><h3>Your backups, your place</h3><p>An exported backup is a file you control. Photonnic never sees where you keep it.</p></div>
+      </div>
+    </section>
+
+    <section class="two">
+      <div>
+        <h2>Install it like an app</h2>
+        <p><strong>iPhone and iPad:</strong> open Photonnic in Safari, tap Share, then Add to Home Screen.</p>
+        <p><strong>Android:</strong> open it in Chrome and tap Install app.</p>
+        <p>After the first visit Photonnic opens, and saves photos, without a connection.</p>
+      </div>
+      <div>
+        <h2>Backups you can hold</h2>
+        <p>Export all photos makes a single .zip on your phone, with every photo at the quality you saved it, and its caption, date and location.</p>
+        <p>Restore reads it back, on the same phone or a new one, and asks before replacing any day that already has a photo. A broken or unfamiliar file is refused before anything changes.</p>
+        <p>Your browser can clear its storage, so export now and then.</p>
+      </div>
+      <div>
+        <h2>A nudge, if you want one</h2>
+        <p>Turn on a daily reminder in Settings and choose its time. It is optional and needs notification permission.</p>
+        <p>On iPhone it works from the Home Screen on iOS 16.4 or later. Delivery depends on your phone, its browser and its focus settings.</p>
+      </div>
+    </section>
+
+    <section class="maker" aria-labelledby="maker-title">
+      <h2 id="maker-title">Made by Emmanuel Oti</h2>
+      <p>Photonnic is designed and built by Emmanuel Oti, who runs <a href="https://kwesimooredigital.com" rel="noopener">Kwesi Moore Digital</a>, the studio behind it.</p>
+      <a class="btn quiet" href="https://kwesimooredigital.com" rel="noopener">Visit Kwesi Moore Digital</a>
+    </section>
+
+    <section class="close">
+      <h2>Start with today.</h2>
+      <a class="btn primary" href="/">Open Photonnic</a>
+    </section>
+
+    <section id="notices" class="notices" aria-labelledby="notices-title">
+      <h2 id="notices-title">Open-source notices</h2>
+      <p>Photonnic includes these open-source libraries, used under their licences:</p>
+      <ul>
+        <li><strong>idb</strong> 8, by Jake Archibald, ISC licence</li>
+        <li><strong>exifr</strong> 7, by Mike Kovařík, MIT licence</li>
+        <li><strong>fflate</strong> 0.8, by Arjun Barrett, MIT licence</li>
+        <li><strong>Workbox</strong> 7, by Google, MIT licence</li>
+      </ul>
+      <p>The photos in the screenshots on this page are sample images from Unsplash (via picsum.photos), used under the Unsplash licence.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Photonnic %APP_VERSION% beta</span>
+    <span>© 2026 Emmanuel Oti</span>
+    <a href="/">Open Photonnic</a>
+  </footer>
+</body>
+</html>

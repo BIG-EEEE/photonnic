@@ -22,11 +22,11 @@ export class StoreError extends Error {
   constructor(code, message, cause) { super(message); this.code = code; this.cause = cause; }
 }
 const MESSAGES = {
-  quota: "Your phone is out of space for Photonic. Free up some space and try again.",
+  quota: "Your phone is out of space for Photonnic. Free up some space and try again.",
   exists: "This day already has a photo.",
   missing: "That photo isn’t saved any more.",
   expired: "It’s too late to undo that.",
-  unavailable: "This browser isn’t letting Photonic save photos. Try opening it outside private browsing.",
+  unavailable: "This browser isn’t letting Photonnic save photos. Try opening it outside private browsing.",
   failed: "Couldn’t save that change. Try again.",
 };
 export const storeError = (code, cause) => new StoreError(code, MESSAGES[code], cause);

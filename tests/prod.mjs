@@ -100,7 +100,8 @@ const snapshot = async (p) => JSON.stringify((await days(p)).map((d) => [d.date,
 try {
   // ================= 1. Capture, storage and image processing =================
   const A = newProfile();
-  let { ctx, p } = await open(A, { perms: ["geolocation"], geo: { latitude: 51.5, longitude: -0.12 } });
+  // Notifications allowed in this browser, so the first-photo reminder offer can appear.
+  let { ctx, p } = await open(A, { perms: ["geolocation", "notifications"], geo: { latitude: 51.5, longitude: -0.12 } });
   const today = await todayOf(p);
   ok((await days(p)).length === 0 && (await p.locator(".empty-note").count()) === 1, "fresh install: empty journal, empty state");
 
@@ -116,6 +117,8 @@ try {
   await save(p, "Lunch on the bench\nwith Ama");
   let d = (await days(p)).find((x) => x.date === today);
   ok(d && d.dateSource === "camera" && d.caption === "Lunch on the bench\nwith Ama", "camera photo saved to today with a two-line caption");
+  ok(/Remind you tomorrow\?/.test(await p.locator(".sheet h3").textContent({ timeout: 5000 })) && /never receives your photos/.test(await p.locator(".sheet p").textContent()), "first photo: offers the daily reminder, saying what the server gets");
+  await p.locator('.sheet [data-a="dismiss"]').click(); await p.waitForTimeout(400);
   ok(d && d.lat === null && d.locationSource === null, "location: off by default, so no position even with permission granted");
   ok(d && d.thumbType === "image/jpeg" && d.thumbSize > 0 && d.width === 1200 && d.height === 900, "stored: thumbnail and full image sizes");
   let img = await image(p, today);
@@ -127,6 +130,8 @@ try {
   ok((await p.locator(".asheet .msg").textContent()) === "This photo is from 3 October.", "library: asks which day for a photo from another day");
   await p.locator('[data-a="date-photo"]').click();
   await save(p, "");
+  await p.waitForTimeout(1600);
+  ok(!(await p.locator(".sheet").count()), "the reminder offer is made once, not after every photo");
   d = (await days(p)).find((x) => x.date === "2026-10-03");
   ok(d && d.dateSource === "exif" && d.takenAt === "2026-10-03T18:20:00" && Math.abs(d.lat - 5.556) < 1e-3 && d.locationSource === "exif", "saved to 3 Oct with its capture time and its own GPS");
 
@@ -275,7 +280,7 @@ try {
   const [dl] = await Promise.all([p.waitForEvent("download"), p.locator('[data-a="backup-download"]').click()]);
   const zipPath = `${OUT}/backup-A.zip`;
   await dl.saveAs(zipPath);
-  ok(dl.suggestedFilename() === `photonic-backup-${today}.zip`, "export: file name photonic-backup-<date>.zip");
+  ok(dl.suggestedFilename() === `photonnic-backup-${today}.zip`, "export: file name photonic-backup-<date>.zip");
   ok(/Download started/.test(await toastLike(p, /Download started/)), "export: says the download started (not that it is safely stored)");
   const parsed = parseBackup(new Uint8Array(fs.readFileSync(zipPath)), { today });
   ok(parsed.entries.length === real.length && parsed.entries.every((e) => real.some((r) => r.date === e.date && r.caption === e.caption)), "export: every day and caption is in the backup");
@@ -288,7 +293,7 @@ try {
   await p.evaluate(() => { window.__shared = null; navigator.canShare = () => true; navigator.share = async (d) => { window.__shared = d.files[0].name + ":" + d.files[0].size; }; });
   await p.locator('[data-a="menu"]').click(); await p.locator('[data-a="export"]').click();
   await p.locator('[data-a="backup-share"]').click({ timeout: 20000 });
-  ok(/Backup sent/.test(await toastLike(p, /Backup sent/)) && (await p.evaluate(() => window.__shared)).startsWith(`photonic-backup-${today}.zip:`), "export: Share hands the zip to the system share sheet");
+  ok(/Backup sent/.test(await toastLike(p, /Backup sent/)) && (await p.evaluate(() => window.__shared)).startsWith(`photonnic-backup-${today}.zip:`), "export: Share hands the zip to the system share sheet");
   await ctx.close();
 
   // ================= 6. Restore into a clean install =================
@@ -464,6 +469,163 @@ try {
   await p.locator('[data-a="delete-all"]').click(); await p.locator('[data-a="delete-all-do"]').click(); await p.waitForTimeout(600);
   ok((await days(p)).length === 0 && (await image(p, today)) === null && (await p.locator(".empty-note").count()) === 1, "delete all: database emptied, empty state shown");
   await ctx.close();
+  // ================= 12. Reminders (browser push and the server are stand-ins) =================
+  // Desktop automation cannot receive a real push, so the push service and the reminder
+  // API are replaced here; real delivery is checked separately against the live server.
+  const PUSH_STUB = `
+    window.__push = JSON.parse(localStorage.getItem("__push") || '{"perm":"granted","unsub":0}');
+    const keep = () => localStorage.setItem("__push", JSON.stringify(window.__push));
+    Object.defineProperty(Notification, "permission", { configurable: true, get: () => window.__push.state || "default" });
+    Notification.requestPermission = async () => { window.__push.state = window.__push.perm; keep(); return window.__push.perm; };
+    const sub = (s) => s && ({ endpoint: s.endpoint, options: { applicationServerKey: new Uint8Array(s.key).buffer },
+      toJSON: () => ({ endpoint: s.endpoint, keys: { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" } }),
+      unsubscribe: async () => { window.__push.unsub++; window.__push.sub = null; keep(); return true; } });
+    Object.defineProperty(ServiceWorkerRegistration.prototype, "pushManager", { configurable: true, get: () => ({
+      getSubscription: async () => sub(window.__push.sub),
+      subscribe: async (o) => { window.__push.sub = { endpoint: "https://fcm.googleapis.com/fcm/send/stub-" + Date.now(), key: [...new Uint8Array(o.applicationServerKey)] }; keep(); return sub(window.__push.sub); },
+    }) });`;
+  const KEY = "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nksh8U";
+  const api = { calls: [], fail: {} };
+  const R = newProfile();
+  const openR = async (opts = {}) => {
+    const c = await chromium.launchPersistentContext(R, { executablePath: CHROME, viewport: { width: 402, height: 874 }, ...opts });
+    await c.addInitScript(PUSH_STUB);
+    await c.route("**/api/**", async (route) => {
+      const req = route.request(), name = new URL(req.url()).pathname.replace("/api/", "");
+      const body = req.postData() ? JSON.parse(req.postData()) : null;
+      api.calls.push({ name, body });
+      const f = api.fail[name];
+      if (f === "abort") return route.abort();
+      if (f) return route.fulfill({ status: f, contentType: "application/json", body: JSON.stringify({ ok: false }) });
+      const out = name === "key" ? { ok: true, key: KEY } : name === "subscribe" ? { ok: true, id: "a".repeat(32), token: "b".repeat(64) } : { ok: true };
+      return route.fulfill({ status: name === "subscribe" ? 201 : 200, contentType: "application/json", body: JSON.stringify(out) });
+    });
+    const pg = c.pages()[0] || (await c.newPage());
+    await pg.goto(URL_, { waitUntil: "networkidle" });
+    await pg.locator(".cal-head h1").waitFor();
+    await pg.evaluate(() => navigator.serviceWorker.ready);
+    return { ctx: c, p: pg };
+  };
+  const status = (pg) => pg.locator("[data-remind-status]").textContent();
+  const remindSetting = (pg) => pg.evaluate(() => new Promise((res) => { const r = indexedDB.open("photonic"); r.onsuccess = () => { const q = r.result.transaction("settings").objectStore("settings").get("reminder"); q.onsuccess = () => { res(q.result?.value || null); r.result.close(); }; }; }));
+  ({ ctx, p } = await openR());
+  await settings(p);
+  ok(/Off until you turn it on/.test(await status(p)) && !api.calls.length, "reminders: off by default, and the server is not contacted");
+  await p.locator('[data-a="toggle-remind"]').click();
+  ok(/never receives your photos, captions or location/.test(await p.locator(".sheet p").textContent()) && !(await p.evaluate(() => window.__push.state)), "reminders: explained before any permission prompt");
+  await p.locator('.sheet [data-a="dismiss"]').click(); await p.waitForTimeout(300);
+  ok(!(await p.evaluate(() => window.__push.state)) && !api.calls.length, "reminders: Not now asks nothing and sends nothing");
+  // Permission refused.
+  await p.evaluate(() => { window.__push.perm = "denied"; localStorage.setItem("__push", JSON.stringify(window.__push)); });
+  await p.locator('[data-a="toggle-remind"]').click(); await p.locator('[data-a="remind-allow"]').click();
+  ok(/blocked/.test(await toastLike(p, /blocked/)) && !api.calls.some((c) => c.name === "subscribe") && (await p.locator('[data-a="toggle-remind"]').getAttribute("aria-checked")) === "false", "reminders: refused permission leaves them off, nothing registered");
+  ok(/Notifications are blocked/.test(await status(p)), "reminders: blocked notifications get clear guidance");
+  await ctx.close();
+  // Server failure: honest, and nothing half-enabled.
+  ({ ctx, p } = await openR());
+  await p.evaluate(() => { window.__push = { perm: "granted", unsub: 0 }; localStorage.setItem("__push", JSON.stringify(window.__push)); });
+  await ctx.close();
+  api.fail.subscribe = 500;
+  ({ ctx, p } = await openR());
+  await settings(p);
+  await p.locator('[data-a="toggle-remind"]').click(); await p.locator('[data-a="remind-allow"]').click();
+  ok(/had a problem/.test(await toastLike(p, /problem/)) && (await p.locator('[data-a="toggle-remind"]').getAttribute("aria-checked")) === "false", "reminders: a server error says so and stays off");
+  ok((await p.evaluate(() => window.__push.unsub)) === 1 && !(await remindSetting(p))?.enabled, "reminders: the half-made browser subscription is removed again");
+  delete api.fail.subscribe;
+  // Working path.
+  api.calls.length = 0;
+  await p.locator('[data-a="toggle-remind"]').click(); await p.locator('[data-a="remind-allow"]').click();
+  ok(/Reminders on: every day at 20:00/.test(await toastLike(p, /Reminders on/)), "reminders: on, with the default time");
+  const subCall = api.calls.find((c) => c.name === "subscribe");
+  const tz = await p.evaluate(() => Intl.DateTimeFormat().resolvedOptions().timeZone);
+  ok(subCall && JSON.stringify(Object.keys(subCall.body).sort()) === '["aware","subscription","time","tz"]' && subCall.body.tz === tz && subCall.body.aware === false, "reminders: the server gets only the subscription, time, time zone and the skip choice");
+  ok(api.calls.every((c) => !JSON.stringify(c.body || {}).match(/caption|blob|image|lat|lng|photo/i)), "reminders: no photo, caption or location data in any request");
+  ok(/^On: one reminder a day at 20:00/.test(await status(p)), "reminders: status says on, and when");
+  await p.locator(".time-in").fill("07:45"); await p.locator(".time-in").dispatchEvent("change");
+  await toastLike(p, /moved to 07:45/);
+  ok(api.calls.some((c) => c.name === "preferences" && c.body.time === "07:45" && c.body.token === "b".repeat(64)), "reminders: a new time is sent with the subscription's token");
+  await ctx.close();
+  ({ ctx, p } = await openR());
+  let st = await remindSetting(p);
+  ok(st?.enabled && st.time === "07:45" && st.tz === tz, "reminders: on, time and zone survive closing the app");
+  // Skip once today's photo is in.
+  api.calls.length = 0;
+  await settings(p);
+  await p.locator('[data-a="toggle-aware"]').click(); await p.waitForTimeout(600);
+  ok(api.calls.some((c) => c.name === "preferences" && c.body.aware === true) && !api.calls.some((c) => c.name === "done"), "skip-when-done: turned on; no photo today, so no date is sent");
+  await p.locator('[data-a="back"]').click(); await p.waitForTimeout(400);
+  await camera(p, FIX + "plain.jpg"); await save(p, "done for today");
+  await p.waitForTimeout(600);
+  const today2 = await todayOf(p);
+  const done = api.calls.filter((c) => c.name === "done");
+  ok(done.length === 1 && done[0].body.date === today2 && JSON.stringify(Object.keys(done[0].body).sort()) === '["date","id","token"]', "skip-when-done: saving today's photo sends only today's date");
+  // The reminder server being down never blocks the journal.
+  api.fail.done = "abort"; api.fail.preferences = "abort";
+  await camera(p, FIX + "big.jpg"); await save(p, "server down");
+  ok((await days(p)).find((x) => x.date === today2)?.caption === "server down", "server unreachable: the photo still saves");
+  await settings(p);
+  await p.locator(".time-in").fill("21:00"); await p.locator(".time-in").dispatchEvent("change");
+  ok(/Couldn’t reach the reminder service/.test(await toastLike(p, /reach/)) && (await remindSetting(p)).time === "07:45", "server unreachable: changing the time says so and keeps the old time");
+  delete api.fail.done; delete api.fail.preferences;
+  // The server forgot this subscription (404): say so.
+  api.fail.preferences = 404;
+  await p.locator(".time-in").fill("21:00"); await p.locator(".time-in").dispatchEvent("change");
+  await toastLike(p, /removed/);
+  ok(/Your reminder stopped/.test(await status(p)) && !(await remindSetting(p)).enabled, "expired subscription: reminders show as stopped, with how to fix it");
+  delete api.fail.preferences;
+  // Turn back on, then off.
+  await p.locator('[data-a="toggle-remind"]').click(); await p.locator('[data-a="remind-allow"]').click(); await toastLike(p, /Reminders on/);
+  api.calls.length = 0;
+  const unsubBefore = await p.evaluate(() => window.__push.unsub);
+  await p.locator('[data-a="toggle-remind"]').click();
+  await toastLike(p, /Reminders off/);
+  ok(api.calls.some((c) => c.name === "unsubscribe" && c.body.token) && (await p.evaluate(() => window.__push.unsub)) === unsubBefore + 1 && !(await remindSetting(p)).enabled, "reminders off: server told, browser subscription removed, setting saved");
+  await ctx.close();
+  // An iPhone outside the Home Screen app gets install guidance, not a broken switch.
+  ({ ctx, p } = await openR({ userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1" }));
+  await settings(p);
+  ok(/Add to Home Screen/.test(await status(p)), "iPhone in Safari: explains the Home Screen requirement");
+  await p.locator('[data-a="toggle-remind"]').click();
+  ok(/Home Screen/.test(await toastLike(p, /Home Screen/)) && !(await p.locator(".sheet").count()), "iPhone in Safari: the switch explains instead of asking for permission");
+  await ctx.close();
+
+  // ================= 13. About page, version, secrets =================
+  const pkgVersion = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+  ({ ctx, p } = await open(newProfile()));
+  await settings(p);
+  ok((await p.locator(".row", { hasText: "Version" }).textContent()).includes(`${pkgVersion} beta`), `version: Settings shows ${pkgVersion} from package.json`);
+  ok((await p.locator('a.row[href="/about/"]').count()) === 1 && (await p.locator('a.row[href="/about/#privacy"]').count()) === 1 && (await p.locator('a.row[href="/about/#notices"]').count()) === 1, "Settings: About, Privacy and notices are real links");
+  await p.locator('[data-a="back"]').click(); await p.waitForTimeout(400);
+  await p.locator('[data-a="menu"]').click();
+  await Promise.all([p.waitForURL(/\/about\/$/), p.locator('[data-a="about"]').click()]);
+  ok((await p.locator("h1").textContent()) === "Your life, one photo at a time.", "More, About Photonic: opens the public page");
+  // Refresh reloads the installed app (it has no browser reload button).
+  await p.goto(URL_, { waitUntil: "networkidle" }); await p.locator(".cal-head h1").waitFor();
+  ok((await p.locator(".cal-head h1").textContent()) === "Photonnic", "name: the app is called Photonnic");
+  await p.evaluate(() => { window.__beforeRefresh = true; });
+  await p.locator('[data-a="menu"]').click();
+  await Promise.all([p.waitForEvent("load"), p.locator('[data-a="refresh"]').click()]);
+  await p.locator(".cal-head h1").waitFor();
+  ok(!(await p.evaluate(() => window.__beforeRefresh)), "More, Refresh: reloads the app");
+  // With the service worker in control, /about/ is still the About page, not the app shell.
+  await p.evaluate(() => navigator.serviceWorker.ready);
+  await p.goto(URL_ + "about/", { waitUntil: "networkidle" });
+  ok(!(await p.locator(".cal-head").count()) && (await p.locator("#privacy").count()) === 1, "About: a direct visit and a refresh show the page, even with the offline worker running");
+  ok((await p.locator(".foot").textContent()).includes(`Photonnic ${pkgVersion} beta`), "version: the About page shows the same version");
+  ok(await p.evaluate(() => [...document.querySelectorAll('script[src], img, link[rel="stylesheet"], link[rel~="icon"], link[rel="apple-touch-icon"]')].every((e) => new URL(e.src || e.href, location.href).origin === location.origin)), "About: every script, image and stylesheet is from Photonic's own site (no tracking)");
+  for (const [w, h] of [[320, 640], [390, 844], [1440, 900]]) {
+    await p.setViewportSize({ width: w, height: h });
+    await p.evaluate(async () => { for (const i of document.images) { i.loading = "eager"; await i.decode().catch(() => {}); } });
+    const l = await p.evaluate(() => ({ over: document.scrollingElement.scrollWidth > innerWidth, broken: [...document.images].filter((i) => !i.naturalWidth).length, h1: document.querySelector("h1").getBoundingClientRect().width }));
+    ok(!l.over && l.broken === 0 && l.h1 <= w, `About at ${w}px: no sideways scroll, every image loads`);
+  }
+  await ctx.close();
+  const distFiles = fs.readdirSync("dist", { recursive: true }).map(String);
+  const distText = distFiles.filter((f) => /\.(js|html|css|webmanifest)$/.test(f)).map((f) => fs.readFileSync(`dist/${f}`, "utf8")).join("\n");
+  ok(!/PRIVATE KEY|vapid_private|ip_salt|token_hash/.test(distText) && !distFiles.some((f) => /config\.php|\.sqlite|server[\\/]/.test(f)), "secrets: no keys, server code or databases in the built site");
+  ok(fs.readFileSync(".gitignore", "utf8").includes("server/config.php") && fs.readFileSync(".gitignore", "utf8").includes("server/data/"), "secrets: the server config and data are kept out of git");
+  ok(fs.readFileSync("CHANGELOG.md", "utf8").includes(`## ${pkgVersion}`), `version: CHANGELOG has an entry for ${pkgVersion}`);
+
 } catch (e) {
   failed++;
   console.log("FAIL crashed:", e.message.split("\n")[0]);

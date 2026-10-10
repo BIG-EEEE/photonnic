@@ -1,4 +1,4 @@
-/* Photonic app. Grew out of the approved prototype (prototype/app.js), which
+/* Photonnic app. Grew out of the approved prototype (prototype/app.js), which
  * stays untouched as the design reference.
  *
  *   mount(phEl, { store, days, today, seed, locate })
@@ -10,6 +10,7 @@ import { key, keyOf, todayKey, parseKey as parse, reliableKey } from "./dates.js
 import { processPhoto, readMeta, deviceLocation, thumbFrom, inspectImage, PhotoError } from "./image.js";
 import { buildBackup, parseBackup, backupName, BackupError } from "./backup.js";
 import { requestPersistence } from "./store.js";
+import * as R from "./reminders.js";
 
 // ---------- Icons (SF Symbols-style, one stroke weight) ----------
 const I = {
@@ -26,6 +27,8 @@ const I = {
   pencil: `<svg class="i" viewBox="0 0 24 24"><path d="m15.5 5.5 3 3M5 16l10.6-10.6a2.1 2.1 0 0 1 3 3L8 19l-4 1 1-4Z"/></svg>`,
   gear: `<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M21.2 12h-2.4M5.2 12H2.8M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7M18.5 18.5l-1.7-1.7M7.2 7.2 5.5 5.5"/><circle cx="12" cy="12" r="6.6"/></svg>`,
   share: `<svg class="i" viewBox="0 0 24 24"><path d="M12 14.5V3.5M8 7.2l4-3.9 4 3.9"/><path d="M8.5 10H7a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1.5"/></svg>`,
+  bell: `<svg class="i" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2H4.5l1.5-2Z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/></svg>`,
+  refresh: `<svg class="i" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg>`,
   info: `<svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg>`,
   lock: `<svg class="i" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>`,
   cameraLine: `<svg class="i" viewBox="0 0 24 24"><path d="M9.2 4.5h5.6l1.5 2.2h3.2A2 2 0 0 1 21.5 8.7v9.3a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2V8.7a2 2 0 0 1 2-2h3.2l1.5-2.2Z"/><circle cx="12" cy="13" r="3.8"/></svg>`,
@@ -42,6 +45,8 @@ const dm = (k) => { const d = parse(k); return `${d.getDate()} ${MONTHS[d.getMon
 
 const byDate = (days) => Object.fromEntries(days.map((d) => [d.date, d]));
 const OPEN_FAILED = "That photo couldn’t be opened. Try another one.";
+// eslint-disable-next-line no-undef
+const VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "dev"; // from package.json, set at build
 const THEME_KEY = "photonic-theme"; // first-paint mirror of the stored choice (see index.html)
 const ago = (i) => i === 1 ? "A month ago" : i === 12 ? "A year ago" : i % 12 === 0 ? `${i / 12} years ago` : `${i} months ago`;
 
@@ -58,6 +63,7 @@ class App {
       photos: byDate(opts.days || []),
       locate: !!opts.locate,
       theme: opts.theme || "system", // system | light | dark
+      remind: opts.reminder || null,  // { enabled, id, token, time, tz, aware, doneSent } (src/reminders.js)
       tab: "calendar",
     };
     this.urls = new WeakMap();   // Blob -> object URL
@@ -146,7 +152,7 @@ class App {
   headerHTML() {
     const pending = !this.s.photos[this.s.today];
     return `<header class="cal-head">
-      <div><h1>Photonic</h1><p>Your life, one photo at a time.</p></div>
+      <div><h1>Photonnic</h1><p>Your life, one photo at a time.</p></div>
       <div class="head-actions">
         <div class="circ-wrap"><button class="circ press" data-a="capture" aria-label="Capture today's photo">${I.camera}${pending ? `<span class="dot" aria-label="Today's photo not taken yet"></span>` : ""}</button><span class="circ-label">Capture</span></div>
         <div class="circ-wrap"><button class="circ press" data-a="menu" aria-label="More">${I.more}</button><span class="circ-label">More</span></div>
@@ -507,6 +513,8 @@ class App {
     });
     if (before && before !== day) this.forget(before);
     this.pop("fade-out");
+    if (d.k === this.s.today) this.syncDone();
+    this.offerReminder();
   }
   async undoReplace(k, replacement) {
     try {
@@ -521,17 +529,30 @@ class App {
   menu() {
     return this.overlay(`<div class="menu" role="menu">
       <button role="menuitem" data-a="settings">Settings${I.gear}</button>
+      <button role="menuitem" data-a="refresh">Refresh${I.refresh}</button>
       <button role="menuitem" data-a="export">Export photos${I.share}</button>
-      <button role="menuitem" data-a="about">About Photonic${I.info}</button></div>`, { clear: true });
+      <button role="menuitem" data-a="about">About Photonnic${I.info}</button></div>`, { clear: true });
   }
   actionSheet(msg, items) {
     return this.overlay(`<div class="asheet" role="dialog">
       <div class="grp">${msg ? `<div class="msg">${msg}</div>` : ""}${items.map(([label, a, red]) => `<button class="${red ? "red" : ""}" data-a="${a}">${label}</button>`).join("")}</div>
       <button class="cancel" data-a="dismiss">Cancel</button></div>`);
   }
+  remindStatus() {
+    const r = this.s.remind, sup = R.support();
+    if (r?.enabled) return `On: one reminder a day at ${r.time}, ${r.tz.replace(/_/g, " ")} time. Delivery depends on your phone and browser.`
+      + (r.aware ? " The reminder server is told only the date of your latest photo." : "");
+    if (r?.lost) return "Your reminder stopped: this phone’s subscription expired or was removed. Turn reminders on again.";
+    if (sup === "ios-install") return "On iPhone and iPad, reminders need iOS 16.4 or later and Photonnic on your Home Screen: tap Share, then Add to Home Screen, and open Photonnic from there.";
+    if (sup === "unsupported") return "This browser can’t show reminders. Try Chrome on Android, or Photonnic from the Home Screen on iPhone.";
+    if (sup === "denied") return "Notifications are blocked for Photonnic. Allow them in your phone or browser settings to use reminders.";
+    return "One quiet notification a day, at the time you choose. Off until you turn it on.";
+  }
   settingsHTML() {
-    const n = this.count();
+    const n = this.count(), r = this.s.remind, on = !!r?.enabled;
     const chev = `<svg class="i" viewBox="0 0 24 24" style="stroke-width:2.2"><path d="m9 5 7 7-7 7"/></svg>`;
+    const link = (href, label) => `<a class="row press" href="${href}">${label}<span class="v">${chev}</span></a>`;
+    const sw = (a, label, checked, busy = false) => `<button class="row press" role="switch" aria-checked="${checked}" data-a="${a}"${busy ? " disabled" : ""}>${label}<span class="v"><span class="switch${checked ? " on" : ""}" aria-hidden="true"></span></span></button>`;
     return `<div class="scroll">
       <div class="bar"><button class="circ sm press" data-a="back" aria-label="Back">${I.back}</button><span></span><span></span></div>
       <div class="page-head"><h1>Settings</h1></div>
@@ -540,25 +561,42 @@ class App {
         <div class="row seg-row"><div class="seg" role="radiogroup" aria-label="Appearance">${[["system", "System"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) =>
           `<button role="radio" aria-checked="${this.s.theme === v}" data-a="theme" data-v="${v}">${l}</button>`).join("")}</div></div>
       </div>
+      <div class="group-label">Reminders</div>
+      <div class="group">
+        ${sw("toggle-remind", "Daily reminder", on, this.remindBusy)}
+        ${on ? `<label class="row">Time<span class="v"><input class="time-in" type="time" value="${r.time}" data-change="remind-time" aria-label="Reminder time"${this.remindBusy ? " disabled" : ""}></span></label>
+        ${sw("toggle-aware", "Skip once today’s photo is in", !!r.aware, this.remindBusy)}` : ""}
+      </div>
+      <p class="group-foot" data-remind-status>${esc(this.remindStatus())}</p>
       <div class="group-label">Camera and location</div>
       <div class="group">
-        <button class="row press" role="switch" aria-checked="${this.s.locate}" data-a="toggle-locate">Location for new photos<span class="v"><span class="switch${this.s.locate ? " on" : ""}" aria-hidden="true"></span></span></button>
+        ${sw("toggle-locate", "Location for new photos", this.s.locate)}
         <div class="row">Photo library<span class="v">Only what you pick</span></div>
       </div>
-      <p class="group-foot">Photos are taken with your phone’s own camera. Photonic keeps the location a photo already has; with this on, new camera photos without one get your current location. Locations stay on this phone.</p>
+      <p class="group-foot">Photos are taken with your phone’s own camera. Photonnic keeps the location a photo already has; with this on, new camera photos without one get your current location. Locations stay on this phone.</p>
       <div class="group-label">Your photos</div>
       <div class="group">
         <div class="row">On this phone<span class="v">${n} ${n === 1 ? "photo" : "photos"}</span></div>
         <button class="row press" data-a="export"${n ? "" : " disabled"}>Export all photos<span class="v">${chev}</span></button>
         <button class="row press" data-a="restore">Restore from backup<span class="v">${chev}</span></button>
       </div>
-      <p class="group-foot">No account and no servers: your photos are kept only in this app on this phone. Export a backup now and then, and before you change phones or clear your browser’s data, and keep it somewhere you trust.</p>
+      <p class="group-foot">No account, and no server ever holds your photos: they live only in this app on this phone. Browser storage can be cleared, so export a backup now and then and keep it somewhere you trust. Where a backup goes is up to you.</p>
       <div class="group-label" id="about">About</div>
       <div class="group">
-        <div class="row">Version<span class="v">1.0 (1)</span></div>
+        ${link("/about/", "About Photonnic")}
+        ${link("/about/#privacy", "Privacy")}
+        ${link("/about/#notices", "Open-source notices")}
+        <div class="row">Version<span class="v">${VERSION} beta</span></div>
       </div>
       <div class="group" style="margin-top:26px;margin-bottom:60px"><button class="row red press" data-a="delete-all"${n ? "" : " disabled"}>Delete all photos</button></div>
     </div><div class="top-fade"></div>`;
+  }
+  refreshSettings() {
+    const top = this.top();
+    if (top?.dataset.view !== "settings") return;
+    const y = top.querySelector(".scroll").scrollTop;
+    top.innerHTML = this.settingsHTML();
+    top.querySelector(".scroll").scrollTop = y;
   }
   openSettings(scrollAbout) {
     this.closeOverlay(true);
@@ -622,6 +660,12 @@ class App {
     this.zipInput.dataset.input = "backup";
     this.zipInput.addEventListener("change", () => { const f = this.zipInput.files && this.zipInput.files[0]; this.zipInput.value = ""; if (f) this.readBackup(f); });
     document.body.append(this.zipInput);
+    // The reminder time is a native time picker; it reports on change.
+    ph.addEventListener("change", (e) => {
+      if (e.target.dataset.change !== "remind-time") return;
+      const v = e.target.value;
+      if (/^([01]\d|2[0-3]):[0-5]\d$/.test(v) && v !== this.s.remind?.time) this.changeRemind({ time: v });
+    });
     // Past midnight with the app open: today moves on.
     document.addEventListener("visibilitychange", () => {
       if (document.hidden || this.fixedToday) return;
@@ -659,6 +703,7 @@ class App {
         this.closeOverlay();
         return this.store.remove(k).then(() => {
           delete s.photos[k]; this.renderBase(); this.pop("fade-out"); this.forget(p);
+          if (k === s.today) this.syncDone();
           this.toast(`Removed the photo from ${dm(k)}`);
         }, (e) => this.toast(e.message));
       }
@@ -681,8 +726,9 @@ class App {
       case "save": return this.save();
       case "menu": return this.menu();
       case "settings": return this.openSettings();
-      case "about": return this.openSettings(true);
+      case "about": this.closeOverlay(true); location.href = "/about/"; return;
       case "export": this.closeOverlay(true); return this.exportBackup();
+      case "refresh": this.closeOverlay(true); return this.refreshApp();
       case "backup-share": return this.shareBackup();
       case "backup-download": return this.downloadBackup();
       case "restore": this.closeOverlay(true); if (!this.busy) this.zipInput.click(); return;
@@ -694,6 +740,32 @@ class App {
         this.top().querySelectorAll('[data-a="theme"]').forEach((b) => b.setAttribute("aria-checked", String(b.dataset.v === s.theme)));
         return this.haptic(5);
       }
+      case "toggle-remind": {
+        const r = s.remind;
+        if (r?.enabled) {
+          this.remindBusy = true; this.refreshSettings();
+          return R.disable(r).then(({ serverOk }) => {
+            s.remind = { enabled: false, asked: true, time: r.time };
+            this.saveRemind();
+            this.toast(serverOk ? "Reminders off" : "Reminders off on this phone; the server forgets it on its next try");
+          }).finally(() => { this.remindBusy = false; this.refreshSettings(); });
+        }
+        const sup = R.support();
+        if (sup !== "ok") return this.toast(sup === "ios-install" ? "Add Photonnic to your Home Screen first, then open it from there" : sup === "denied" ? "Notifications are blocked for Photonnic in your settings" : "This browser can’t show reminders");
+        return this.remindSheet(false);
+      }
+      case "remind-allow": {
+        this.closeOverlay(true);
+        const time = s.remind?.time || "20:00";
+        const asking = R.enable({ time, aware: false }); // starts inside this tap, as the permission prompt requires
+        this.remindBusy = true; this.refreshSettings();
+        return asking.then((state) => {
+          s.remind = state; this.saveRemind();
+          this.toast(`Reminders on: every day at ${state.time}`);
+          this.syncDone();
+        }, (e) => this.toast(e.message || "Reminders couldn’t be turned on.")).finally(() => { this.remindBusy = false; this.refreshSettings(); });
+      }
+      case "toggle-aware": return this.changeRemind({ aware: !s.remind.aware });
       case "toggle-locate": {
         s.locate = !s.locate;
         this.store.setSetting("locate", s.locate).catch(() => {});
@@ -702,12 +774,13 @@ class App {
         this.top().querySelector(".scroll").scrollTop = y;
         return;
       }
-      case "delete-all": return this.actionSheet(`Delete all ${this.count()} photos from Photonic? Photos in your phone’s own photo library are not affected. This can’t be undone.`, [["Delete all photos", "delete-all-do", true]]);
+      case "delete-all": return this.actionSheet(`Delete all ${this.count()} photos from Photonnic? Photos in your phone’s own photo library are not affected. This can’t be undone.`, [["Delete all photos", "delete-all-do", true]]);
       case "delete-all-do": {
         this.closeOverlay(true);
         return this.store.clear().then(() => {
           Object.values(s.photos).forEach((p) => this.forget(p));
           s.photos = {}; this.popAll(); s.tab = "calendar"; this.renderBase(); this.toast("All photos deleted");
+          this.syncDone();
         }, (e) => this.toast(e.message));
       }
       case "shuffle": { const all = this.days(); return this.openDetail(all[Math.floor(Math.random() * all.length)]); }
@@ -718,6 +791,68 @@ class App {
         if (this.restoring) { this.restoring = null; this.closeOverlay(); return this.toast("Restore cancelled. Nothing was changed."); }
         return this.closeOverlay();
     }
+  }
+
+  // Reload the app and pick up a new version if one is waiting. Saved photos are untouched.
+  async refreshApp() {
+    this.toast("Refreshing…", null, true);
+    try { const reg = await navigator.serviceWorker?.getRegistration(); await Promise.race([reg?.update(), new Promise((r) => setTimeout(r, 4000))]); } catch {}
+    location.reload();
+  }
+
+  // ----- Reminders (M6) -----
+  // Reminders are meant to be on: right after the first saved photo, Photonnic offers to turn
+  // them on (the phone itself requires one tap to allow notifications). Asked once.
+  remindSheet(first) {
+    const time = this.s.remind?.time || "20:00";
+    return this.overlay(`<div class="sheet" role="dialog" aria-label="Daily reminder">
+      <div class="glyph">${I.bell}</div>
+      <h3>${first ? "Remind you tomorrow?" : "A daily reminder"}</h3>
+      <p>${first ? `One notification a day at ${time}, so no day slips by. Change the time or turn it off any time in Settings.` : "One notification a day, at the time you choose."} Your browser gives the Photonnic reminder server an anonymous address to deliver it, with the time and your time zone. It never receives your photos, captions or location.</p>
+      <button class="btn primary wide press" data-a="remind-allow">Turn on reminders</button>
+      <button class="btn plain wide press" data-a="dismiss">Not now</button>
+    </div>`);
+  }
+  offerReminder() {
+    const r = this.s.remind;
+    if (this.store.kind !== "idb" || r?.enabled || r?.asked || R.support() !== "ok") return;
+    this.s.remind = { ...(r || {}), enabled: false, asked: true, time: r?.time || "20:00" };
+    this.saveRemind();
+    setTimeout(() => { if (!this.ov && this.top()?.dataset.view !== "preview") this.remindSheet(true); }, 1400); // after the "Saved" moment
+  }
+  saveRemind() { this.store.setSetting("reminder", this.s.remind).catch(() => {}); }
+  async changeRemind(changes) {
+    const r = this.s.remind;
+    if (!r?.enabled || this.remindBusy) return;
+    this.remindBusy = true; this.refreshSettings();
+    try {
+      this.s.remind = await R.update(r, changes);
+      this.saveRemind();
+      if (changes.time) this.toast(`Reminder moved to ${changes.time}`);
+      if (changes.aware) await this.syncDone();
+    } catch (e) {
+      if (e.code === "expired") { this.s.remind = { ...r, enabled: false, lost: true }; this.saveRemind(); }
+      this.toast(e.message);
+    } finally { this.remindBusy = false; this.refreshSettings(); }
+  }
+  /* With "skip once today's photo is in" on, tell the server today's date when today has a
+   * photo, and clear it if today's photo is removed. Only ever a date; never blocks saving. */
+  async syncDone() {
+    const r = this.s.remind;
+    if (!r?.enabled || !r.aware) return;
+    const date = this.s.photos[this.s.today] ? this.s.today : null;
+    if (r.doneSent === date || (date === null && r.doneSent !== this.s.today)) return;
+    try { this.s.remind = await R.reportDone(r, date); this.saveRemind(); }
+    catch (e) { if (e.code === "expired") { this.s.remind = { ...r, enabled: false, lost: true }; this.saveRemind(); } }
+  }
+  /* On start: still subscribed? Same time zone? Then bring the done date up to date. */
+  async initReminders() {
+    if (!this.s.remind?.enabled) return;
+    try {
+      const next = await R.check(this.s.remind);
+      if (next !== this.s.remind) { this.s.remind = next; this.saveRemind(); }
+    } catch {}
+    this.syncDone();
   }
 
   // ----- Backup (M5): made and read on the phone; nothing is uploaded -----
@@ -731,6 +866,7 @@ class App {
       const days = await this.store.list();
       const blob = await buildBackup(days, (d) => this.store.getImage(d), {
         today: this.s.today,
+        app: `Photonnic ${VERSION}`,
         onProgress: (i, total) => { msg.textContent = `Preparing backup… ${i} of ${total}`; },
       });
       this.backupFile = new File([blob], backupName(this.s.today), { type: "application/zip" });
@@ -751,7 +887,7 @@ class App {
     this.closeOverlay(true);
     if (!file) return;
     try {
-      await navigator.share({ files: [file], title: "Photonic backup" });
+      await navigator.share({ files: [file], title: "Photonnic backup" });
       this.backupFile = null;
       this.toast("Backup sent. Check it arrived where you chose.");
     } catch (e) {
@@ -802,7 +938,7 @@ class App {
     if (!clash.length) return this.actionSheet(`Restore ${photos(n)} from this backup?`, [[`Restore ${photos(n)}`, "restore-keep"]]);
     const which = clash.length <= 3 ? clash.map(dm).join(", ").replace(/, ([^,]*)$/, " and $1") : `${clash.length} of the ${n} days`;
     // One question covers every clash, so a big backup never means a dialog per day.
-    return this.actionSheet(`${which} already ${clash.length === 1 ? "has a photo" : "have photos"} here. Which should Photonic keep?`,
+    return this.actionSheet(`${which} already ${clash.length === 1 ? "has a photo" : "have photos"} here. Which should Photonnic keep?`,
       [["Keep my photos", "restore-keep"], ["Use the backup’s photos", "restore-replace", true]]);
   }
   async commitRestore(mode) {

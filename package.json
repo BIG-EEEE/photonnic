@@ -1,14 +1,14 @@
 {
   "name": "photonic",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "build:demo": "vite build --mode demo --outDir dist-demo",
     "icons": "node tools/make-icons.mjs",
-    "test": "npm run build && npm run build:demo && node tests/unit.mjs && node tests/run.mjs && node tests/prod.mjs"
+    "test": "npm run build && npm run build:demo && node tests/unit.mjs && php server/tests/run.php && node tests/run.mjs && node tests/prod.mjs"
   },
   "devDependencies": {
     "piexifjs": "^1.0.6",

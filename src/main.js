@@ -33,10 +33,12 @@ const app = mount(ph, {
   days: await store.list(),
   locate: await store.getSetting("locate", false),
   theme: await store.getSetting("theme", "system"),
+  reminder: await store.getSetting("reminder", null),
   ...extra,
 });
 if (problem) app.toast(problem);
 app.repairThumbs();
+app.initReminders(); // never awaited: the journal does not wait for the reminder server
 
 // Hooks for the test suite, demo mode only.
 if (demo) Object.assign(window, { app, toggleTheme: () => { app.s.theme = ph.dataset.theme === "dark" ? "light" : "dark"; app.applyTheme(); } });

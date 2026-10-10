@@ -62,8 +62,10 @@ function compare(actualBuf, refPath, name) {
   const W = a.width, H = a.height, k = W / 402;
   // Mask what only the mockup frame draws: status bar, home indicator, rounded corners.
   const R = 55 * k, top = 62 * k, bottom = H - 22 * k;
+  // The title text: the app was renamed Photonnic after the renders were approved.
+  const title = (x, y) => name !== "detail" && x >= 18 * k && x <= 240 * k && y >= 64 * k && y <= 102 * k;
   const masked = (x, y) => {
-    if (y < top || y > bottom) return true;
+    if (y < top || y > bottom || title(x, y)) return true;
     const cx = x < R ? R : x > W - R ? W - R : x, cy = y < R ? R : y > H - R ? H - R : y;
     return (x - cx) ** 2 + (y - cy) ** 2 > R * R;
   };

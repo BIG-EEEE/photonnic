@@ -3,6 +3,9 @@ import path from "node:path";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
+// The one source of the version: package.json. Shown in Settings, the About page and backups.
+const VERSION = JSON.parse(fs.readFileSync("package.json", "utf8")).version;
+
 // Demo photos live in prototype/photos. They are served by the dev server and
 // copied into the demo build only, never into the production build.
 function demoPhotos(mode) {
@@ -26,17 +29,22 @@ function demoPhotos(mode) {
 }
 
 export default defineConfig(({ mode }) => ({
-  build: { target: "es2022" },
+  define: { __APP_VERSION__: JSON.stringify(VERSION) },
+  build: {
+    target: "es2022",
+    rollupOptions: { input: { app: path.resolve("index.html"), about: path.resolve("about/index.html") } },
+  },
   plugins: [
     demoPhotos(mode),
+    { name: "photonic-version", transformIndexHtml: (html) => html.replaceAll("%APP_VERSION%", VERSION) },
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "script",
       includeAssets: ["icons/apple-touch-icon.png", "icons/favicon-32.png"],
       manifest: {
         id: "/",
-        name: "Photonic",
-        short_name: "Photonic",
+        name: "Photonnic",
+        short_name: "Photonnic",
         description: "Your life, one photo at a time.",
         start_url: "/",
         scope: "/",
@@ -55,6 +63,9 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,png,webmanifest}"],
         globIgnores: ["demo/**"],
         navigateFallback: "index.html",
+        // The reminder API and the public About page are never answered with the app shell.
+        navigateFallbackDenylist: [/^\/api\//, /^\/about/],
+        importScripts: ["push-sw.js"],
         cleanupOutdatedCaches: true,
       },
     }),

@@ -1,0 +1,96 @@
+/* About Photonic: the public page. Same palette and type as the app (src/app.css),
+ * set out as an editorial page rather than a phone screen. */
+:root {
+  --ground: #F8F7F4; --surface: #FFFFFF; --tile: #EFEDE8;
+  --ink: #1C1B19; --ink-2: #4A4845; --ink-3: #66645F; --hairline: rgba(28, 27, 25, .09);
+  --sf: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+  --gutter: clamp(16px, 5vw, 64px);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --ground: #121211; --surface: #1F1F1D; --tile: #1C1C1A; --ink: #F2F1EE; --ink-2: #C9C7C2; --ink-3: #9C9A94; --hairline: rgba(255, 255, 255, .09); color-scheme: dark; }
+}
+:root[data-theme="dark"] { --ground: #121211; --surface: #1F1F1D; --tile: #1C1C1A; --ink: #F2F1EE; --ink-2: #C9C7C2; --ink-3: #9C9A94; --hairline: rgba(255, 255, 255, .09); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+html { background: var(--ground); }
+body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.55 var(--sf); -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; }
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; }
+a:focus-visible, .btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; border-radius: 8px; }
+h1, h2, h3 { margin: 0; letter-spacing: -.02em; line-height: 1.1; }
+h1 { font-size: clamp(40px, 7.4vw, 76px); font-weight: 700; letter-spacing: -.035em; }
+h2 { font-size: clamp(28px, 4.2vw, 44px); font-weight: 700; }
+h3 { font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+p { margin: 0; }
+
+.skip { position: absolute; left: -999px; top: 8px; background: var(--ink); color: var(--ground); padding: 8px 14px; border-radius: 10px; z-index: 10; }
+.skip:focus { left: 8px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: max(14px, env(safe-area-inset-top)) var(--gutter) 14px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 19px; letter-spacing: -.02em; text-decoration: none; }
+.brand img { border-radius: 8px; }
+.pill { font-size: 15px; font-weight: 600; text-decoration: none; padding: 9px 16px; border-radius: 20px; background: var(--surface); box-shadow: 0 1px 2px rgba(28,27,25,.06), 0 6px 20px rgba(28,27,25,.08); }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 24px; border-radius: 26px; font-weight: 600; font-size: 17px; letter-spacing: -.01em; text-decoration: none; }
+.btn.primary { background: var(--ink); color: var(--ground); }
+.btn.quiet { background: var(--surface); box-shadow: inset 0 0 0 1px var(--hairline); }
+
+main > section { padding: clamp(56px, 9vw, 120px) var(--gutter); max-width: 1180px; margin: 0 auto; }
+
+.hero { display: grid; grid-template-columns: 1fr; gap: 48px; align-items: center; padding-top: clamp(24px, 5vw, 64px) !important; }
+.eyebrow { font-size: 15px; font-weight: 600; color: var(--ink-3); margin-bottom: 18px; }
+.lede { font-size: clamp(19px, 2.2vw, 22px); color: var(--ink-2); margin-top: 22px; max-width: 34ch; line-height: 1.45; }
+.cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.phone { margin: 0; }
+.phone img { border-radius: 9% / 4.2%; box-shadow: 0 2px 6px rgba(28,27,25,.06), 0 30px 70px rgba(28,27,25,.16); background: var(--tile); }
+.hero-phone { max-width: 340px; justify-self: center; width: 100%; }
+
+.band { max-width: none !important; }
+.idea { text-align: center; }
+.idea h2 { max-width: 16ch; margin: 0 auto; }
+.idea p { font-size: clamp(19px, 2.2vw, 22px); color: var(--ink-2); max-width: 40ch; margin: 22px auto 0; line-height: 1.5; }
+
+.steps { list-style: none; padding: 0; margin: 40px 0 0; display: grid; gap: 28px; grid-template-columns: 1fr; }
+.steps .n { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--tile); font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+.steps p { color: var(--ink-2); margin-top: 8px; }
+.shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(12px, 3vw, 36px); margin-top: 56px; }
+.shots figcaption { font-size: 14px; color: var(--ink-3); margin-top: 14px; text-align: center; }
+
+.privacy { background: var(--surface); }
+.privacy > h2, .privacy .cards { max-width: calc(1180px - 2 * var(--gutter)); margin-left: auto; margin-right: auto; }
+.cards { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 36px !important; }
+.cards > div { background: var(--ground); border-radius: 22px; padding: 24px; }
+.cards p { color: var(--ink-2); margin-top: 8px; font-size: 16px; }
+
+.two { display: grid; grid-template-columns: 1fr; gap: 44px; }
+.two h2 { font-size: clamp(24px, 3vw, 30px); margin-bottom: 14px; }
+.two p { color: var(--ink-2); }
+.two p + p { margin-top: 10px; }
+
+.maker { text-align: center; }
+.maker p { color: var(--ink-2); max-width: 44ch; margin: 18px auto 26px; font-size: 19px; }
+.close { text-align: center; padding-top: 0 !important; }
+.close h2 { margin-bottom: 24px; }
+
+.notices { border-top: 1px solid var(--hairline); font-size: 15px; color: var(--ink-3); }
+.notices h2 { font-size: 20px; color: var(--ink); margin-bottom: 10px; }
+.notices ul { padding-left: 20px; margin: 10px 0; }
+.notices p + p { margin-top: 10px; }
+
+.foot { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: center; padding: 28px var(--gutter) max(28px, env(safe-area-inset-bottom)); font-size: 14px; color: var(--ink-3); border-top: 1px solid var(--hairline); }
+
+@media (min-width: 720px) {
+  .steps { grid-template-columns: repeat(2, 1fr); }
+  .cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 980px) {
+  .hero { grid-template-columns: 1.15fr .85fr; }
+  .steps { grid-template-columns: repeat(4, 1fr); }
+  .cards { grid-template-columns: repeat(3, 1fr); }
+  .two { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 520px) {
+  .shots { grid-template-columns: 1fr; max-width: 300px; margin-left: auto; margin-right: auto; }
+  .btn { width: 100%; }
+}
