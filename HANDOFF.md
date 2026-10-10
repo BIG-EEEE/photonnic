@@ -165,7 +165,7 @@ Live test build: **https://photonnic.destinyfamily.org**
 | Appearance: System / Light / Dark | Done | bf51db0, 551021d |
 | M4 Calendar and memories finished (Look Back, captions, theme first paint) | Done | 551021d |
 | M5 Backup export and restore | Done | 7ec93a8 |
-| M6 Daily reminders (server, Settings, About page, Photonnic name, 0.2.0) | Built and deployed; phone delivery to confirm | 7518c55 |
+| M6 Daily reminders (server, Settings, About page, Photonnic name, 0.2.0) | Done: a reminder was received on the owner's phone (10 Oct 2026) | 7518c55 |
 | M7 Real-device QA | Not started | |
 
 ### What the app really does now
@@ -265,6 +265,6 @@ How the server is set up:
 - A repeated run sent nothing.
 - Turning reminders off deleted the row.
 
-**Not verified:** a notification actually appearing. Automated desktop Chrome did not display it (its push channel appears blocked under automation), so this must be confirmed on a real phone.
+**Real phone:** the owner confirmed on 10 October 2026 that a scheduled reminder arrived on their phone. Automated desktop Chrome never displayed one (its push channel appears blocked under automation).
 
 **Data the server holds per subscription:** the push endpoint and its keys, the time, the time zone, the skip choice, the last photo date (only with skip on), and delivery bookkeeping. Nothing else.
