@@ -37,6 +37,15 @@ $plain = openssl_decrypt(substr($body, 0, -16), 'aes-128-gcm', $cek, OPENSSL_RAW
 ok($rs === 4096 && $idlen === 65 && $plain === $msg . "\x02", 'payload decrypts to the reminder text with the record delimiter');
 ok(!str_contains($rec, 'moment'), 'payload is not readable in transit');
 
+// RFC 8291 Appendix A: with the RFC's fixed keys and salt we must produce its exact bytes.
+$asD = b64url_decode('yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw');
+$asPubRfc = b64url_decode('BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8');
+// The RFC's server key as SEC1 DER: version, private scalar, curve P-256, public point.
+$sec1 = hex2bin('30770201010420') . $asD . hex2bin('a00a06082a8648ce3d030107a144034200') . $asPubRfc;
+$asKey = openssl_pkey_get_private("-----BEGIN EC PRIVATE KEY-----\n" . chunk_split(base64_encode($sec1), 64, "\n") . "-----END EC PRIVATE KEY-----\n");
+$rfc = encrypt_payload('When I grow up, I want to be a watermelon', 'BCVxsr7N_eNgVRqvHtD0zTZsEc6-VV-JvLexhqUzORcxaOzi6-AYWXvTBHm4bjyPjs7Vd8pZGH6SRpkNtoIAiw4', 'BTBZMqHH6r4Tts7J_aSIgg', $asKey, b64url_decode('DGv6ra1nlYgDCS1FRnbzlw'));
+ok(b64url($rfc) === 'DGv6ra1nlYgDCS1FRnbzlwAAEABBBP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A_yl95bQpu6cVPTpK4Mqgkf1CXztLVBSt2Ks3oZwbuwXPXLWyouBWLVWGNWQexSgSxsj_Qulcy4a-fN', 'encryption matches the RFC 8291 test vector byte for byte');
+
 // VAPID: a valid ES256 JWT for the endpoint's origin.
 $h = vapid_header('https://fcm.googleapis.com/fcm/send/abc');
 preg_match('/^vapid t=([^.]+)\.([^.]+)\.([^,]+), k=(.+)$/', $h, $m);

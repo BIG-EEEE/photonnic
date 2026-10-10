@@ -165,7 +165,7 @@ Live test build: **https://photonnic.destinyfamily.org**
 | Appearance: System / Light / Dark | Done | bf51db0, 551021d |
 | M4 Calendar and memories finished (Look Back, captions, theme first paint) | Done | 551021d |
 | M5 Backup export and restore | Done | 7ec93a8 |
-| M6 Daily reminders | Not started: needs a small push server (PHP + cron on cPanel) | |
+| M6 Daily reminders (server, Settings, About page, Photonnic name, 0.2.0) | Built and deployed; phone delivery to confirm | 7518c55 |
 | M7 Real-device QA | Not started | |
 
 ### What the app really does now
@@ -182,7 +182,7 @@ It builds both versions, then runs three suites:
 | `tests/run.mjs` | 39 | Calendar, detail, empty and dark screens match the approved renders pixel for pixel; the demo journey with real file pickers; appearance; production starts empty, installable, offline |
 | `tests/prod.mjs` | 83 | Production build with real IndexedDB, file pickers and downloads |
 
-**Last run: 233 passed, 0 failed.**
+**Last run (0.2.0): 318 passed, 0 failed:** unit 111, server 46 (`php server/tests/run.php`), design and journey 39, production 122.
 
 `tests/prod.mjs` reads the stored data back for every check. It covers:
 - capture and save;
@@ -248,3 +248,23 @@ How the server is set up:
 - **Restore:** a backup from one phone restored onto another.
 - **Persistent storage:** whether the browser grants it, which is untested on a phone.
 - **Feel:** motion and haptics.
+
+### Reminders (0.2.0)
+
+**On the server (destinyt cPanel):**
+- **Code:** `~/photonic-push/`, outside the web root: `lib.php`, `api.php`, `worker.php`, `setup.php`.
+- **Secrets:** `config.php`, created once by `setup.php` and readable by the account only. It holds the VAPID key pair and is never committed.
+- **Database:** `data/push.sqlite`.
+- **API front door:** `public_html/photonnic.destinyfamily.org/api/index.php` plus `.htaccess`.
+- **Cron, every five minutes:** `0-59/5 * * * * /opt/cpanel/ea-php84/root/usr/bin/php /home2/destinyt/photonic-push/worker.php >/dev/null 2>&1`. The old crontab is saved as `~/crontab.bak-*`.
+- **To update the server code:** copy the four PHP files into `~/photonic-push/`. Never re-run `setup.php`: a new key pair would break every existing subscription.
+
+**Verified:**
+- The encryption matches the RFC 8291 test vector byte for byte, and the signing key passes its check.
+- The live worker sent to Google's push service, which accepted it (201).
+- A repeated run sent nothing.
+- Turning reminders off deleted the row.
+
+**Not verified:** a notification actually appearing. Automated desktop Chrome did not display it (its push channel appears blocked under automation), so this must be confirmed on a real phone.
+
+**Data the server holds per subscription:** the push endpoint and its keys, the time, the time zone, the skip choice, the last photo date (only with skip on), and delivery bookkeeping. Nothing else.

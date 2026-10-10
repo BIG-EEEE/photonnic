@@ -146,14 +146,14 @@ function vapid_header(string $endpoint): string {
 }
 
 /* RFC 8291: encrypt one record with aes128gcm for this subscription. */
-function encrypt_payload(string $plain, string $p256dhB64, string $authB64): string {
+function encrypt_payload(string $plain, string $p256dhB64, string $authB64, $as = null, ?string $salt = null): string {
     $ua = b64url_decode($p256dhB64); $auth = b64url_decode($authB64);
-    $as = ec_new();
+    $as = $as ?: ec_new(); // fixed key and salt only in tests (RFC 8291 Appendix A)
     $asPub = ec_raw_public($as);
     $secret = openssl_pkey_derive(ec_public_from_raw($ua), $as, 32);
     if ($secret === false) throw new RuntimeException('key agreement failed');
     $ikm = hash_hkdf('sha256', $secret, 32, "WebPush: info\0" . $ua . $asPub, $auth);
-    $salt = random_bytes(16);
+    $salt = $salt ?? random_bytes(16);
     $cek = hash_hkdf('sha256', $ikm, 16, "Content-Encoding: aes128gcm\0", $salt);
     $nonce = hash_hkdf('sha256', $ikm, 12, "Content-Encoding: nonce\0", $salt);
     $cipher = openssl_encrypt($plain . "\x02", 'aes-128-gcm', $cek, OPENSSL_RAW_DATA, $nonce, $tag);
